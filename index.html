@@ -261,12 +261,23 @@
     .btn-add:hover{background:#345a3d;}
     .btn-delete{background:none; border:none; color:var(--forest-berry); cursor:pointer; font-size:14px;}
 
-    .record-table{
-        width:100%; border-collapse:collapse; text-align:center; font-size:12px;
-        margin-bottom:26px; white-space:nowrap;
+    .record-table-wrap{
+        overflow-x:auto; overflow-y:auto; clear:both;
+        max-height:620px;
+        border:1px solid var(--forest-line);
+        border-radius:6px;
+        margin-bottom:26px;
     }
-    .record-table th, .record-table td{border:1px solid var(--forest-line); padding:0; height:26px;}
-    .record-table th{background:var(--forest-mid); color:#fff; padding:5px 9px; font-weight:700;}
+    .record-table{
+        width:100%; min-width:1180px; border-collapse:collapse; text-align:center; font-size:12px;
+        table-layout:fixed; white-space:nowrap;
+    }
+    .record-table th, .record-table td{border:1px solid var(--forest-line); padding:0; height:26px; overflow:hidden;}
+    .record-table th{
+        background:var(--forest-mid); color:#fff; padding:5px 4px; font-weight:700;
+        position:sticky; top:0; z-index:5;
+        box-shadow:0 1px 0 var(--forest-bark);
+    }
     .record-table input{
         width:100%; height:100%; border:none; text-align:center; font-size:12px;
         outline:none; background:transparent; box-sizing:border-box; font-family:inherit; color:var(--forest-deep);
@@ -275,6 +286,23 @@
     .readonly-cell{background-color:#efece0; color:var(--forest-bark);}
     .total-row td{font-weight:700; background:var(--forest-gold-pale); padding:5px;}
     .bg-orange{background:var(--forest-gold);}
+
+    /* 欄寬設定：學生姓名/備考加寬，每堂收費縮窄 */
+    .record-table col.col-date{width:6%;}
+    .record-table col.col-student{width:13%;}
+    .record-table col.col-fee{width:6%;}
+    .record-table col.col-remitted{width:6%;}
+    .record-table col.col-actual{width:6%;}
+    .record-table col.col-rate{width:6%;}
+    .record-table col.col-twd{width:5%;}
+    .record-table col.col-convtwd{width:7%;}
+    .record-table col.col-classes{width:5%;}
+    .record-table col.col-method{width:6%;}
+    .record-table col.col-avg{width:6%;}
+    .record-table col.col-ppfee{width:6%;}
+    .record-table col.col-pprate{width:6%;}
+    .record-table col.col-notes{width:12%;}
+    .record-table col.col-action{width:4%;}
 
     .month-color-1{background:#f3e6c4;}
     .month-color-2{background:#dfe9d8;}
@@ -392,8 +420,15 @@
         支援 .xlsx / .xls / .csv，會自動辨識「收款日、學生、每堂收費、匯入金額、實收金額、匯率、台幣、換算台幣、購買堂數、匯款方式、備考」等欄位標題並附加到下方紀錄後面
     </div>
 
-    <div style="overflow-x:auto; clear:both;">
+    <div class="record-table-wrap" id="recordTableWrap">
         <table class="record-table" id="recordTable">
+            <colgroup>
+                <col class="col-date"><col class="col-student"><col class="col-fee">
+                <col class="col-remitted"><col class="col-actual">
+                <col class="col-rate"><col class="col-twd"><col class="col-convtwd"><col class="col-classes">
+                <col class="col-method"><col class="col-avg"><col class="col-ppfee">
+                <col class="col-pprate"><col class="col-notes"><col class="col-action">
+            </colgroup>
             <thead>
                 <tr>
                     <th>收款日</th><th>學生</th><th>每堂收費</th>
@@ -441,6 +476,10 @@
             title.childNodes[1].textContent = ' 實際收入與匯款紀錄表 ';
             renderTable();
             renderSummary();
+            requestAnimationFrame(() => {
+                const wrap = document.getElementById('recordTableWrap');
+                if (wrap) wrap.scrollTop = wrap.scrollHeight;
+            });
         } else {
             cal.style.display = 'block';
             actual.style.display = 'none';
@@ -990,7 +1029,7 @@
                 <td><input type="text" value="${row.fee}" onchange="updateRow(${index}, 'fee', this.value)"></td>
                 <td><input type="number" step="0.01" value="${row.remitted}" oninput="autoCalculate(${index}, 'remitted', this.value)"></td>
                 <td><input type="number" step="0.01" value="${row.actual}" oninput="autoCalculate(${index}, 'actual', this.value)"></td>
-                <td><input type="number" step="0.0001" value="${row.rate}" oninput="autoCalculate(${index}, 'rate', this.value)"></td>
+                <td><input type="number" step="0.01" value="${row.rate}" oninput="autoCalculate(${index}, 'rate', this.value)"></td>
                 <td><input type="number" value="${row.twd}" oninput="autoCalculate(${index}, 'twd', this.value)"></td>
                 <td><input type="number" class="readonly-cell" readonly value="${row.convTwd}"></td>
                 <td><input type="number" value="${row.classes}" oninput="autoCalculate(${index}, 'classes', this.value)"></td>
@@ -1016,6 +1055,10 @@
         records.push({ date: "", student: "", fee: "", remitted: "", actual: "", rate: "", twd: "", convTwd: "", classes: "", method: "", avg: "", ppFee: "", ppRate: "", notes: "" });
         renderTable();
         saveData();
+        requestAnimationFrame(() => {
+            const wrap = document.getElementById('recordTableWrap');
+            if (wrap) wrap.scrollTop = wrap.scrollHeight;
+        });
     }
 
     function deleteRow(index) {
@@ -1036,12 +1079,17 @@
         records[index][field] = value;
         let r = records[index];
 
+        if (field === 'rate') {
+            let rv = parseFloat(r.rate);
+            if (!isNaN(rv)) r.rate = rv.toFixed(2);
+        }
+
         let rem = parseFloat(r.remitted);
         let act = parseFloat(r.actual);
         if (!isNaN(rem) && !isNaN(act) && rem > 0 && rem !== act) {
             let fee = rem - act;
             r.ppFee = fee.toFixed(2);
-            r.ppRate = (fee / rem).toFixed(6);
+            r.ppRate = (fee / rem).toFixed(2);
         } else {
             r.ppFee = "";
             r.ppRate = "";
@@ -1050,7 +1098,7 @@
         let rate = parseFloat(r.rate);
         let twd = parseFloat(r.twd);
         if (!isNaN(act) && !isNaN(rate)) {
-            r.convTwd = Math.round(act * rate).toString();
+            r.convTwd = Math.ceil(act * rate).toString();
         } else if (!isNaN(twd)) {
             r.convTwd = twd.toString();
         } else {
