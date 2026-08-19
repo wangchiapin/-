@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>每日上課收入與學生收費紀錄表</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+    :root{
+        --forest-deep:#1e3a2c;      /* 深松綠：頁首、主要文字 */
+        --forest-mid:#3f6b4a;       /* 苔綠：主要按鈕/表頭 */
+        --forest-light:#8fae86;     /* 鼠尾草綠：次要表頭 */
+        --forest-pale:#dfe9d8;      /* 淺鼠尾草：斑馬紋底色 */
+        --forest-cream:#f5f2e6;     /* 羊皮紙：頁面底色 */
+        --forest-card:#fffdf7;      /* 卡片底色 */
+        --forest-gold:#c39a45;      /* 陽光穿林：強調/總計 */
+        --forest-gold-pale:#f3e6c4; /* 淺金：亮點底色 */
+        --forest-bark:#5b4a37;      /* 樹皮棕：邊框/次文字 */
+        --forest-berry:#a04b3f;     /* 漿果紅：刪除/警示 */
+        --forest-line:#c9bfa0;      /* 細邊線色 */
+    }
+    *{box-sizing:border-box;}
+    body{
+        font-family:'Noto Sans TC','Microsoft JhengHei',Tahoma,sans-serif;
+        margin:0;
+        padding:14px 18px 28px;
+        background:
+            radial-gradient(ellipse at top left, rgba(143,174,134,0.25), transparent 55%),
+            radial-gradient(ellipse at bottom right, rgba(195,154,69,0.12), transparent 55%),
+            var(--forest-cream);
+        color:var(--forest-deep);
+    }
+
+    /* ===== 頂部導覽列 ===== */
+    .topbar{
+        max-width:1500px;
+        margin:0 auto 14px;
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        background:var(--forest-deep);
+        color:#f5f2e6;
+        padding:12px 20px;
+        border-radius:10px;
+        box-shadow:0 4px 14px rgba(30,58,44,0.25);
+    }
+    .topbar-title{
+        font-family:'Noto Serif TC',serif;
+        font-weight:700;
+        font-size:19px;
+        display:flex;
+        align-items:center;
+        gap:8px;
+        letter-spacing:0.5px;
+    }
+    .topbar-title svg{flex:0 0 auto;}
+    .topbar-title .sub{
+        font-family:'Noto Sans TC',sans-serif;
+        font-weight:400;
+        font-size:12px;
+        color:var(--forest-light);
+        margin-left:6px;
+    }
+    .btn-nav{
+        font-family:'Noto Sans TC',sans-serif;
+        background:var(--forest-gold);
+        color:var(--forest-deep);
+        border:none;
+        padding:9px 18px;
+        border-radius:20px;
+        font-weight:700;
+        font-size:13px;
+        cursor:pointer;
+        transition:0.2s;
+        white-space:nowrap;
+    }
+    .btn-nav:hover{background:#d8ac54; transform:translateY(-1px);}
+
+    .view{max-width:1500px; margin:0 auto;}
+
+    /* ===== 通用卡片 ===== */
+    .card{
+        background:var(--forest-card);
+        border-radius:10px;
+        box-shadow:0 3px 10px rgba(91,74,55,0.10);
+        border:1px solid var(--forest-line);
+    }
+
+    /* ===== 主頁三欄 ===== */
+    .main-wrapper{
+        display:flex;
+        gap:14px;
+        align-items:flex-start;
+        flex-wrap:wrap;
+    }
+    .student-panel{
+        flex:0 0 320px;
+        padding:12px 16px;
+    }
+    .calendar-panel{
+        flex:1 1 560px;
+        min-width:520px;
+        padding:10px 14px 14px;
+    }
+    .chart-panel{
+        flex:0 0 400px;
+        padding:12px 14px;
+    }
+    .chart-canvas-wrap{
+        position:relative;
+        width:100%;
+        height:300px;
+    }
+    .panel-heading{
+        font-family:'Noto Serif TC',serif;
+        font-size:13px;
+        font-weight:700;
+        color:var(--forest-mid);
+        margin:0 0 8px;
+        padding-bottom:6px;
+        border-bottom:2px solid var(--forest-pale);
+        display:flex;
+        align-items:center;
+        gap:6px;
+    }
+
+    /* ===== 學生收費表 ===== */
+    .student-table{
+        width:100%;
+        border-collapse:collapse;
+        text-align:center;
+        margin-bottom:10px;
+        font-size:13px;
+    }
+    .student-table th{
+        border:1px solid var(--forest-bark);
+        background:var(--forest-mid);
+        color:#fff;
+        padding:6px 2px;
+        font-weight:500;
+    }
+    .student-table td{
+        border:1px solid var(--forest-line);
+        padding:0;
+        height:26px;
+    }
+    .student-table input{
+        width:100%; height:100%; border:none; text-align:center;
+        font-size:13px; outline:none; background:transparent; box-sizing:border-box;
+        font-family:inherit; color:var(--forest-deep);
+    }
+    .student-table input:focus{background-color:var(--forest-gold-pale);}
+    .add-btn{
+        width:100%; padding:6px; border:1px dashed var(--forest-mid);
+        background:var(--forest-pale); cursor:pointer; border-radius:6px;
+        color:var(--forest-mid); font-size:12px; font-weight:700;
+    }
+    .add-btn:hover{background:#cfe0c5;}
+    .delete-btn{
+        background:none; border:none; color:var(--forest-berry);
+        cursor:pointer; font-size:14px; padding:0 4px;
+    }
+    .color-swatch{
+        width:26px; height:20px; border:1px solid var(--forest-line); border-radius:4px;
+        cursor:pointer; padding:0; background:transparent;
+    }
+
+    /* ===== 日曆 ===== */
+    .controls{
+        display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;
+    }
+    .controls button{
+        padding:5px 12px; border:1px solid var(--forest-mid); border-radius:16px;
+        background:var(--forest-card); cursor:pointer; transition:0.2s;
+        font-weight:700; color:var(--forest-mid); font-size:12px;
+    }
+    .controls button:hover{background:var(--forest-pale);}
+    .month-title{
+        font-family:'Noto Serif TC',serif;
+        font-size:18px; font-weight:700; color:var(--forest-deep);
+    }
+    .calendar-table{
+        width:100%; border-collapse:collapse; text-align:center; table-layout:fixed;
+    }
+    .calendar-table th, .calendar-table td{
+        border:1px solid var(--forest-line); padding:0; vertical-align:top;
+    }
+    .month-header{background:var(--forest-mid); height:24px;}
+    .month-header th{color:#fff; font-weight:700; font-size:12px;}
+    .day-header{background:var(--forest-light); height:20px;}
+    .day-header th{font-weight:500; color:#fff; font-size:11px;}
+    .date-row{
+        background:var(--forest-pale); color:var(--forest-deep); font-size:11px; height:18px;
+        display:flex; align-items:center; justify-content:center;
+        border-bottom:1px solid var(--forest-line); font-weight:700;
+    }
+    .input-cell{height:16px; border:1px solid var(--forest-line); box-sizing:border-box; margin:0 2px;}
+    .input-cell input{
+        width:100%; height:100%; border:none; text-align:center;
+        font-size:11px; outline:none; background:transparent; color:var(--forest-deep); font-family:inherit;
+        padding:0;
+    }
+    .input-cell input:focus{background-color:var(--forest-gold-pale);}
+    .empty-day{background:#efece0;}
+    .calendar-table td.weekly-total{
+        vertical-align:middle; font-weight:700; font-size:11px; color:var(--forest-deep);
+        background:var(--forest-gold-pale); text-align:center;
+    }
+    .summary-container{display:flex; justify-content:flex-end; margin-top:8px;}
+    .summary-table{width:auto; border-collapse:collapse;}
+    .summary-table th{
+        background:var(--forest-gold); border:1px solid var(--forest-bark);
+        padding:5px 14px; font-weight:700; font-size:12px; color:var(--forest-deep);
+    }
+    .summary-table td{
+        border:1px solid var(--forest-bark); padding:5px 14px; font-weight:700;
+        font-size:13px; background:var(--forest-card); color:var(--forest-deep);
+    }
+    input::-webkit-outer-spin-button, input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
+    input[type=number]{-moz-appearance:textfield;}
+
+    /* ===== 月結彙總表(左側面板下方) ===== */
+    .summary-grand{
+        display:flex; gap:6px; margin-top:14px; margin-bottom:8px;
+    }
+    .summary-grand div{
+        flex:1; background:var(--forest-mid); color:#fff; border-radius:6px;
+        padding:7px 4px; text-align:center;
+    }
+    .summary-grand .label{font-size:10px; opacity:0.85; margin-bottom:2px;}
+    .summary-grand .value{font-size:14px; font-weight:700;}
+    .summary-report-table{
+        width:100%; border-collapse:collapse; text-align:center; margin-bottom:6px; font-size:12px;
+    }
+    .summary-report-table th{
+        border:1px solid var(--forest-line); background:var(--forest-bark); color:#fff;
+        padding:4px 2px; font-weight:500; font-size:11px;
+    }
+    .summary-report-table td{border:1px solid var(--forest-line); padding:3px 2px; height:22px;}
+    .year-row td{background:var(--forest-gold); color:var(--forest-deep); font-weight:700;}
+    .bg-berry-bright{background:var(--forest-berry); color:#fff; font-weight:700;}
+    .bg-gold-bright{background:var(--forest-gold-pale); font-weight:700;}
+    .bg-beige{background:#f2ede0;}
+
+    /* ===== 實際收入紀錄頁 ===== */
+    .actual-container{padding:18px 20px;}
+    .actual-container h2{
+        text-align:center; color:var(--forest-deep); margin-top:0;
+        font-family:'Noto Serif TC',serif; font-size:20px;
+    }
+    .btn{
+        padding:7px 15px; border:1px solid var(--forest-mid); border-radius:16px;
+        background:var(--forest-card); cursor:pointer; font-weight:700;
+        color:var(--forest-mid); margin-bottom:12px; transition:0.2s; font-size:12px;
+    }
+    .btn:hover{background:var(--forest-pale);}
+    .btn-add{background:var(--forest-mid); color:#fff; border:none;}
+    .btn-add:hover{background:#345a3d;}
+    .btn-delete{background:none; border:none; color:var(--forest-berry); cursor:pointer; font-size:14px;}
+
+    .record-table{
+        width:100%; border-collapse:collapse; text-align:center; font-size:12px;
+        margin-bottom:26px; white-space:nowrap;
+    }
+    .record-table th, .record-table td{border:1px solid var(--forest-line); padding:0; height:26px;}
+    .record-table th{background:var(--forest-mid); color:#fff; padding:5px 9px; font-weight:700;}
+    .record-table input{
+        width:100%; height:100%; border:none; text-align:center; font-size:12px;
+        outline:none; background:transparent; box-sizing:border-box; font-family:inherit; color:var(--forest-deep);
+    }
+    .record-table input:focus{background-color:var(--forest-gold-pale);}
+    .readonly-cell{background-color:#efece0; color:var(--forest-bark);}
+    .total-row td{font-weight:700; background:var(--forest-gold-pale); padding:5px;}
+    .bg-orange{background:var(--forest-gold);}
+
+    .month-color-1{background:#f3e6c4;}
+    .month-color-2{background:#dfe9d8;}
+    .month-color-3{background:#e4ded0;}
+    .month-color-4{background:#ecd9c9;}
+    .month-color-5{background:#e9e4d6;}
+
+    .summary-wrapper{display:flex; justify-content:center; margin-top:26px; overflow-x:auto;}
+    .summary-table2{border-collapse:collapse; text-align:center; font-size:13px;}
+    .summary-table2 th, .summary-table2 td{border:1px solid var(--forest-bark); padding:6px 14px;}
+    .header-cell{background:var(--forest-light); color:#fff;}
+    .data-cell{background:var(--forest-pale);}
+    .total-cell, .avg-cell{background:var(--forest-gold); font-weight:700; color:var(--forest-deep);}
+
+    /* ===== 每月統計標題按鈕 & 完整統計彈窗 ===== */
+    .stats-btn{
+        width:100%; text-align:left; background:none; border:none; cursor:pointer;
+        font-family:'Noto Serif TC',serif; font-size:13px; font-weight:700; color:var(--forest-mid);
+        margin:14px 0 8px; padding:0 0 6px; border-bottom:2px solid var(--forest-pale);
+        display:flex; align-items:center; justify-content:space-between; gap:6px;
+    }
+    .stats-btn:hover{color:var(--forest-deep);}
+    .stats-btn .hint{font-size:10px; font-weight:400; color:var(--forest-bark); opacity:0.8;}
+    .modal-overlay{
+        display:none; position:fixed; inset:0; background:rgba(30,58,44,0.55);
+        z-index:100; align-items:center; justify-content:center; padding:20px;
+    }
+    .modal-overlay.open{display:flex;}
+    .modal-box{
+        background:var(--forest-card); border-radius:10px; max-width:720px; width:100%;
+        max-height:85vh; overflow-y:auto; padding:18px 20px; box-shadow:0 10px 30px rgba(0,0,0,0.3);
+    }
+    .modal-box h3{
+        font-family:'Noto Serif TC',serif; color:var(--forest-deep); margin:0 0 12px;
+        display:flex; justify-content:space-between; align-items:center; font-size:16px;
+    }
+    .modal-close{
+        background:var(--forest-mid); color:#fff; border:none; border-radius:14px;
+        padding:5px 14px; cursor:pointer; font-size:12px; font-weight:700;
+    }
+    .modal-close:hover{background:#345a3d;}
+
+    @media (max-width:1180px){
+        .calendar-panel{min-width:100%; order:-1;}
+        .student-panel, .chart-panel{flex:1 1 100%;}
+    }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+    <div class="topbar-title" id="pageTitle">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2C8 6 5 9.5 5 13.5C5 17.09 7.91 20 11.5 20C11.5 20 11.5 17 11.5 15C9 15 7 13 7 10.5C7 8.5 8.5 6.5 12 2Z" fill="#c39a45"/><path d="M12 2C16 6 19 9.5 19 13.5C19 17.09 16.09 20 12.5 20C12.5 20 12.5 17 12.5 15C15 15 17 13 17 10.5C17 8.5 15.5 6.5 12 2Z" fill="#8fae86"/><rect x="11.3" y="18" width="1.4" height="4" fill="#5b4a37"/></svg>
+        每日上課收入與學生收費紀錄表
+        <span class="sub">每天一分鐘 · 教學收入管理</span>
+    </div>
+    <button class="btn-nav" id="navBtn" onclick="toggleView()">查看實際收入紀錄 →</button>
+</div>
+
+<!-- ===================== 主頁：每日上課收入與學生收費紀錄表 ===================== -->
+<div class="view" id="view-calendar">
+    <div class="main-wrapper">
+        <!-- 左側：學生收費面板 -->
+        <div class="student-panel card">
+            <div class="panel-heading">🌿 學生收費表</div>
+            <table class="student-table" id="studentTable">
+                <thead>
+                    <tr>
+                        <th style="width:32%;">學生姓名</th>
+                        <th style="width:26%;">收費</th>
+                        <th style="width:16%;">台幣</th>
+                        <th style="width:16%;">顏色</th>
+                        <th style="width:10%;"></th>
+                    </tr>
+                </thead>
+                <tbody id="student-tbody"></tbody>
+            </table>
+            <button class="add-btn" onclick="addStudent()">+ 新增學生欄位</button>
+            <div id="monthly-summary-area"></div>
+        </div>
+
+        <!-- 中間：日曆面板 -->
+        <div class="calendar-panel card">
+            <div class="controls">
+                <button onclick="changeMonth(-1)">◀ 上個月</button>
+                <div class="month-title" id="monthTitle">載入中...</div>
+                <button onclick="changeMonth(1)">下個月 ▶</button>
+            </div>
+            <div id="calendar-area"></div>
+            <div class="summary-container">
+                <table class="summary-table">
+                    <tr><th>節數</th><td id="totalClasses">0</td></tr>
+                    <tr><th>月結</th><td id="monthlyTotal">0</td></tr>
+                    <tr><th>平均</th><td id="monthlyAvg">0</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- 右側：圖表面板 -->
+        <div class="chart-panel card">
+            <div class="panel-heading">📈 收入趨勢</div>
+            <div class="chart-canvas-wrap"><canvas id="incomeChart"></canvas></div>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== 次頁：實際收入紀錄表 ===================== -->
+<div class="view card actual-container" id="view-actual" style="display:none;">
+    <h2>實際收入與匯款紀錄</h2>
+    <button class="btn btn-add" onclick="addRow()">+ 新增一筆紀錄</button>
+    <button class="btn" onclick="exportData()" style="float:right;">匯出資料</button>
+    <button class="btn" onclick="document.getElementById('excelImportInput').click()" style="float:right; margin-right:8px; background:var(--forest-gold-pale);">📥 匯入 Excel</button>
+    <input type="file" id="excelImportInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importExcel(event)">
+    <div style="clear:both; font-size:11px; color:var(--forest-bark); margin:-4px 0 10px;">
+        支援 .xlsx / .xls / .csv，會自動辨識「收款日、學生、每堂收費、匯入金額、實收金額、匯率、台幣、換算台幣、購買堂數、匯款方式、備考」等欄位標題並附加到下方紀錄後面
+    </div>
+
+    <div style="overflow-x:auto; clear:both;">
+        <table class="record-table" id="recordTable">
+            <thead>
+                <tr>
+                    <th>收款日</th><th>學生</th><th>每堂收費</th>
+                    <th>匯入金額<br>(美金/墨幣)</th><th>實收金額<br>(美金/墨幣)</th>
+                    <th>匯率</th><th>台幣</th><th>換算台幣</th><th>購買堂數</th>
+                    <th>匯款方式</th><th>平均每堂</th><th>PayPal手續費</th>
+                    <th>PayPal手續費率</th><th>備考</th><th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="record-tbody"></tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="7" style="background:transparent; border:none;"></td>
+                    <td id="totalConvertedTwd" class="bg-orange" style="font-weight:700; padding:5px; border:1px solid var(--forest-bark); text-align:center;">0</td>
+                    <td colspan="7" style="background:transparent; border:none;"></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <div class="summary-wrapper" id="summary-area"></div>
+</div>
+
+<div class="modal-overlay" id="statsModal" onclick="if(event.target===this) closeStatsModal();">
+    <div class="modal-box">
+        <h3>📊 每月統計（完整）<button class="modal-close" onclick="closeStatsModal()">關閉</button></h3>
+        <div id="stats-modal-body"></div>
+    </div>
+</div>
+
+<script>
+    /* ============================================================
+       頁面切換
+    ============================================================ */
+    function toggleView(){
+        const cal = document.getElementById('view-calendar');
+        const actual = document.getElementById('view-actual');
+        const btn = document.getElementById('navBtn');
+        const title = document.getElementById('pageTitle');
+        const showingCalendar = cal.style.display !== 'none';
+        if (showingCalendar){
+            cal.style.display = 'none';
+            actual.style.display = 'block';
+            btn.textContent = '← 返回主頁';
+            title.childNodes[1].textContent = ' 實際收入與匯款紀錄表 ';
+            renderTable();
+            renderSummary();
+        } else {
+            cal.style.display = 'block';
+            actual.style.display = 'none';
+            btn.textContent = '查看實際收入紀錄 →';
+            title.childNodes[1].textContent = ' 每日上課收入與學生收費紀錄表 ';
+            renderCalendar();
+            updateChart();
+        }
+    }
+
+    /* ============================================================
+       學生收費表
+    ============================================================ */
+    const defaultStudents = [
+        {name:"Nicole", fee:"18美金", twd:"490", bg:"#8fae86"},
+        {name:"Megan", fee:"18美金", twd:"490", bg:"#8fae86"},
+        {name:"Mirna", fee:"325披索", twd:"500", bg:"#a9c2e6"},
+        {name:"Mauricio", fee:"400披索", twd:"650", bg:"#a8c2c2"},
+        {name:"Santiago&Sophia", fee:"350索", twd:"550", bg:"#f3e6c4"},
+        {name:"Pablo", fee:"18美金", twd:"520", bg:"#d9e1cf"},
+        {name:"Alexa", fee:"350披索", twd:"550", bg:"#e6c9c4"},
+        {name:"Javier(MX)", fee:"330披索", twd:"520", bg:"#dfe9d8"},
+        {name:"Alberto", fee:"350披索", twd:"550", bg:"#ccc0da"},
+        {name:"西班牙文", fee:"200台幣", twd:"200", bg:"#e6b8b7"},
+        {name:"Eli", fee:"18.75美金", twd:"500", bg:"#e4dfec"},
+        {name:"Tania", fee:"300披索", twd:"480", bg:"#f3e6c4"},
+        {name:"David", fee:"350披索", twd:"550", bg:"#f3e6c4"},
+        {name:"Vasthy", fee:"330披索", twd:"520", bg:"#dfe9d8"},
+        {name:"Thomas", fee:"700台幣", twd:"700", bg:"#c39a45"},
+        {name:"Javier", fee:"650台幣", twd:"650", bg:"#8ea9db"},
+        {name:"Juan", fee:"380披索", twd:"600", bg:"#f3e6c4"}
+    ];
+
+    let studentData = JSON.parse(localStorage.getItem('studentFeeData'));
+    if (!studentData) {
+        studentData = defaultStudents;
+        localStorage.setItem('studentFeeData', JSON.stringify(studentData));
+    }
+
+    function renderStudents() {
+        const tbody = document.getElementById('student-tbody');
+        tbody.innerHTML = '';
+        studentData.forEach((student, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="background-color: ${student.bg || '#fff'};">
+                    <input type="text" value="${student.name}" onchange="updateStudent(${index}, 'name', this.value)" style="background: transparent;">
+                </td>
+                <td><input type="text" value="${student.fee}" onchange="updateStudent(${index}, 'fee', this.value)"></td>
+                <td><input type="text" value="${student.twd}" onchange="updateStudent(${index}, 'twd', this.value)"></td>
+                <td><input type="color" class="color-swatch" value="${toHexColor(student.bg)}" onchange="updateStudentColor(${index}, this.value)" title="選擇顏色"></td>
+                <td><button class="delete-btn" onclick="removeStudent(${index})" title="刪除">&times;</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function updateStudent(index, field, value) {
+        studentData[index][field] = value;
+        localStorage.setItem('studentFeeData', JSON.stringify(studentData));
+    }
+
+    function updateStudentColor(index, value) {
+        studentData[index].bg = value;
+        localStorage.setItem('studentFeeData', JSON.stringify(studentData));
+        renderStudents();
+    }
+
+    function toHexColor(color) {
+        if (!color) return '#ffffff';
+        if (/^#([0-9a-f]{3}){1,2}$/i.test(color)) return color;
+        const ctx = document.createElement('canvas').getContext('2d');
+        ctx.fillStyle = color;
+        return ctx.fillStyle;
+    }
+
+    function addStudent() {
+        studentData.push({name: "", fee: "", twd: "", bg: "#ffffff"});
+        localStorage.setItem('studentFeeData', JSON.stringify(studentData));
+        renderStudents();
+    }
+
+    function removeStudent(index) {
+        if(confirm("確定要刪除這筆學生資料嗎？")) {
+            studentData.splice(index, 1);
+            localStorage.setItem('studentFeeData', JSON.stringify(studentData));
+            renderStudents();
+        }
+    }
+
+    renderStudents();
+
+    /* ============================================================
+       日曆與每日收入
+    ============================================================ */
+    let currentDate = new Date();
+    let currentYear = currentDate.getFullYear();
+    let currentMonth = currentDate.getMonth();
+    const ROC_YEAR_OFFSET = 1911;
+
+    let incomeData = JSON.parse(localStorage.getItem('classIncomeData')) || {};
+
+    function saveIncomeData() {
+        localStorage.setItem('classIncomeData', JSON.stringify(incomeData));
+        calculateTotals();
+    }
+
+    function changeMonth(offset) {
+        currentMonth += offset;
+        if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+        else if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+        renderCalendar();
+    }
+
+    function renderCalendar() {
+        const rocYear = currentYear - ROC_YEAR_OFFSET;
+        document.getElementById('monthTitle').textContent = `${rocYear}年${currentMonth + 1}月`;
+
+        let html = '<table class="calendar-table">';
+        html += `<thead>
+                    <tr class="month-header">
+                        <th colspan="7">${rocYear}年${currentMonth + 1}月</th>
+                        <th style="width:56px;">週結</th>
+                    </tr>
+                    <tr class="day-header">
+                        <th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>日</th><th></th>
+                    </tr>
+                 </thead><tbody>`;
+
+        const firstDay = new Date(currentYear, currentMonth, 1);
+        const lastDay = new Date(currentYear, currentMonth + 1, 0);
+
+        let startDayOfWeek = firstDay.getDay() || 7;
+        let currentDay = 1;
+        let isFirstWeek = true;
+
+        while (currentDay <= lastDay.getDate()) {
+            html += '<tr>';
+            for (let i = 1; i <= 7; i++) {
+                if (isFirstWeek && i < startDayOfWeek) {
+                    html += '<td class="empty-day"></td>';
+                } else if (currentDay > lastDay.getDate()) {
+                    html += '<td class="empty-day"></td>';
+                } else {
+                    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
+                    if (!incomeData[dateStr]) { incomeData[dateStr] = ['', '', '', '', '', '']; }
+
+                    html += '<td>';
+                    html += `<div class="date-row">${currentMonth + 1}/${currentDay}</div>`;
+                    for (let j = 0; j < 6; j++) {
+                        let val = incomeData[dateStr][j] || '';
+                        html += `<div class="input-cell"><input type="number" data-date="${dateStr}" data-index="${j}" value="${val}" oninput="updateIncomeValue(this)" onwheel="this.blur()"></div>`;
+                    }
+                    html += '</td>';
+                    currentDay++;
+                }
+            }
+            html += `<td class="weekly-total"></td>`;
+            html += '</tr>';
+            isFirstWeek = false;
+        }
+
+        html += '</tbody></table>';
+        document.getElementById('calendar-area').innerHTML = html;
+        calculateTotals();
+    }
+
+    function updateIncomeValue(inputElem) {
+        const date = inputElem.getAttribute('data-date');
+        const index = inputElem.getAttribute('data-index');
+        incomeData[date][index] = inputElem.value;
+        saveIncomeData();
+    }
+
+    // 計算所有月份的統計資料，回傳共用結構供 mini / 完整版使用
+    function buildMonthlySummaryData() {
+        let summary = {};
+        let grandTotal = 0;
+        let grandClasses = 0;
+
+        let currentROCYear = currentYear - ROC_YEAR_OFFSET;
+        let startRocYear = currentROCYear + 1;
+        let endRocYear = currentROCYear - 1;
+
+        Object.keys(incomeData).forEach(dateStr => {
+            const parts = dateStr.split('-');
+            if(parts.length !== 3) return;
+            const year = parseInt(parts[0]);
+            const rocY = year - 1911;
+            const month = parseInt(parts[1]);
+
+            if (rocY > startRocYear) startRocYear = rocY;
+            if (rocY < endRocYear) endRocYear = rocY;
+
+            if (!summary[rocY]) summary[rocY] = {};
+            if (!summary[rocY][month]) summary[rocY][month] = { total: 0, classes: 0 };
+
+            incomeData[dateStr].forEach(val => {
+                const num = parseFloat(val);
+                if (!isNaN(num) && val.trim() !== '') {
+                    summary[rocY][month].total += num;
+                    summary[rocY][month].classes += 1;
+                    grandTotal += num;
+                    grandClasses += 1;
+                }
+            });
+        });
+
+        if (startRocYear - endRocYear < 2) {
+            endRocYear = startRocYear - 2;
+        }
+
+        return { summary, grandTotal, grandClasses, startRocYear, endRocYear };
+    }
+
+    function monthCellClass(monthTotal) {
+        if (monthTotal >= 36000) return 'bg-berry-bright';
+        if (monthTotal >= 30000) return 'bg-gold-bright';
+        if (monthTotal > 0) return 'bg-beige';
+        return '';
+    }
+
+    // 主頁左欄：只顯示總計卡片 + 最近 2 個月，標題可點擊開啟完整彈窗
+    function renderMonthlySummary() {
+        const { summary, grandTotal, grandClasses } = buildMonthlySummaryData();
+        const grandAvg = grandClasses > 0 ? Math.round(grandTotal / grandClasses) : 0;
+
+        // 以目前日曆顯示的月份為基準，往前抓最近 2 個月
+        const anchorRocYear = currentYear - ROC_YEAR_OFFSET;
+        const anchorMonth = currentMonth + 1;
+        const recentMonths = [];
+        for (let i = 0; i < 2; i++) {
+            let m = anchorMonth - i;
+            let y = anchorRocYear;
+            while (m < 1) { m += 12; y -= 1; }
+            recentMonths.push({ y, m });
+        }
+
+        let html = `<button class="stats-btn" onclick="openStatsModal()">
+                        <span>📊 每月統計</span>
+                        <span class="hint">近 2 個月 · 點擊查看全部 ▸</span>
+                    </button>`;
+        html += `<div class="summary-grand">
+                    <div><div class="label">累計收入</div><div class="value">${grandTotal}</div></div>
+                    <div><div class="label">累積節數</div><div class="value">${grandClasses}</div></div>
+                    <div><div class="label">每堂平均</div><div class="value">${grandAvg}</div></div>
+                  </div>`;
+
+        html += `<table class="summary-report-table">
+                    <thead>
+                        <tr>
+                            <th style="width:32%;">月份</th>
+                            <th style="width:32%;">金額</th>
+                            <th style="width:18%;">節數</th>
+                            <th style="width:18%;">平均</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+        recentMonths.forEach(({y, m}) => {
+            let monthData = summary[y] && summary[y][m] ? summary[y][m] : { total: 0, classes: 0 };
+            let monthAvg = monthData.classes > 0 ? Math.round(monthData.total / monthData.classes) : '';
+            html += `<tr>
+                        <td>${y}年${m}月</td>
+                        <td class="${monthCellClass(monthData.total)}">${monthData.total || ''}</td>
+                        <td>${monthData.classes || ''}</td>
+                        <td>${monthAvg}</td>
+                      </tr>`;
+        });
+        html += '</tbody></table>';
+
+        document.getElementById('monthly-summary-area').innerHTML = html;
+    }
+
+    // 彈窗：完整每月統計（所有年份/月份）
+    function renderMonthlySummaryFull() {
+        const { summary, startRocYear, endRocYear } = buildMonthlySummaryData();
+        let html = '';
+
+        for (let y = startRocYear; y >= endRocYear; y--) {
+            let yearlyTotal = 0;
+            let yearlyClasses = 0;
+            for (let m = 1; m <= 12; m++) {
+                if (summary[y] && summary[y][m]) {
+                    yearlyTotal += summary[y][m].total;
+                    yearlyClasses += summary[y][m].classes;
+                }
+            }
+            let yearlyAvgSalary = Math.round(yearlyTotal / 12);
+
+            html += `<table class="summary-report-table">
+                        <thead>
+                            <tr>
+                                <th style="width:26%;">月份</th>
+                                <th style="width:30%;">金額</th>
+                                <th style="width:20%;">節數</th>
+                                <th style="width:24%;">平均</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <tr class="year-row">
+                            <td colspan="2">${y}年 合計</td>
+                            <td>${yearlyClasses}</td>
+                            <td>月均${yearlyAvgSalary}</td>
+                        </tr>`;
+
+            for (let m = 1; m <= 12; m++) {
+                let monthData = summary[y] && summary[y][m] ? summary[y][m] : { total: 0, classes: 0 };
+                let monthTotal = monthData.total;
+                let monthClasses = monthData.classes;
+                let monthAvg = monthClasses > 0 ? Math.round(monthTotal / monthClasses) : '-';
+
+                html += `<tr>
+                            <td>${m}月</td>
+                            <td class="${monthCellClass(monthTotal)}">${monthTotal || ''}</td>
+                            <td>${monthClasses || ''}</td>
+                            <td>${monthAvg !== '-' ? monthAvg : ''}</td>
+                          </tr>`;
+            }
+            html += '</tbody></table>';
+        }
+
+        document.getElementById('stats-modal-body').innerHTML = html;
+    }
+
+    function openStatsModal() {
+        renderMonthlySummaryFull();
+        document.getElementById('statsModal').classList.add('open');
+    }
+
+    function closeStatsModal() {
+        document.getElementById('statsModal').classList.remove('open');
+    }
+
+    function calculateTotals() {
+        let monthlyTotal = 0;
+        let classCount = 0;
+
+        const rows = document.querySelectorAll('#calendar-area tbody tr');
+        rows.forEach(row => {
+            let weekTotal = 0;
+            let hasValue = false;
+            const inputs = row.querySelectorAll('input');
+            inputs.forEach(input => {
+                const val = parseFloat(input.value);
+                if (!isNaN(val) && input.value.trim() !== '') {
+                    weekTotal += val;
+                    monthlyTotal += val;
+                    classCount++;
+                    hasValue = true;
+                }
+            });
+            const weekTotalCell = row.querySelector('.weekly-total');
+            if (weekTotalCell) {
+                weekTotalCell.textContent = hasValue ? weekTotal : '';
+            }
+        });
+
+        document.getElementById('monthlyTotal').textContent = monthlyTotal;
+        document.getElementById('totalClasses').textContent = classCount;
+        document.getElementById('monthlyAvg').textContent = classCount > 0 ? Math.round(monthlyTotal / classCount) : 0;
+        renderMonthlySummary();
+        updateChart();
+    }
+
+    function updateChart() {
+        let summary = {};
+        let minYear = 9999, minMonth = 12;
+        let maxYear = 0, maxMonth = 1;
+        let hasData = false;
+
+        Object.keys(incomeData).forEach(dateStr => {
+            const parts = dateStr.split('-');
+            if(parts.length !== 3) return;
+
+            let dayHasValue = false;
+            incomeData[dateStr].forEach(val => {
+                const num = parseFloat(val);
+                if (!isNaN(num) && val.trim() !== '') {
+                    dayHasValue = true;
+                }
+            });
+
+            if (!dayHasValue) return;
+            hasData = true;
+
+            const year = parseInt(parts[0]);
+            const rocY = year - 1911;
+            const month = parseInt(parts[1]);
+
+            if (rocY < minYear || (rocY === minYear && month < minMonth)) {
+                minYear = rocY; minMonth = month;
+            }
+            if (rocY > maxYear || (rocY === maxYear && month > maxMonth)) {
+                maxYear = rocY; maxMonth = month;
+            }
+
+            if (!summary[rocY]) summary[rocY] = {};
+            if (!summary[rocY][month]) summary[rocY][month] = 0;
+
+            incomeData[dateStr].forEach(val => {
+                const num = parseFloat(val);
+                if (!isNaN(num) && val.trim() !== '') {
+                    summary[rocY][month] += num;
+                }
+            });
+        });
+
+        if (!hasData) {
+            minYear = currentYear - 1911 - 1; minMonth = 8;
+            maxYear = currentYear - 1911 + 1; maxMonth = 12;
+        }
+
+        let labels = [];
+        let dataPts = [];
+
+        for (let y = minYear; y <= maxYear; y++) {
+            let startM = (y === minYear) ? minMonth : 1;
+            let endM = (y === maxYear) ? maxMonth : 12;
+            for (let m = startM; m <= endM; m++) {
+                labels.push(`${y}年${m}月`);
+                dataPts.push((summary[y] && summary[y][m]) ? summary[y][m] : 0);
+            }
+        }
+
+        let n = dataPts.length;
+        let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+        for (let i = 0; i < n; i++) {
+            sumX += i;
+            sumY += dataPts[i];
+            sumXY += i * dataPts[i];
+            sumXX += i * i;
+        }
+        let mLine = 0, bLine = 0;
+        if (n > 1) {
+            mLine = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+            bLine = (sumY - mLine * sumX) / n;
+        } else if (n === 1) {
+            bLine = dataPts[0];
+        }
+        let trendPts = [];
+        for (let i = 0; i < n; i++) {
+            trendPts.push(mLine * i + bLine);
+        }
+
+        const canvasEl = document.getElementById('incomeChart');
+        if (!canvasEl) return;
+        const ctx = canvasEl.getContext('2d');
+        if (window.incomeChartInstance) {
+            window.incomeChartInstance.destroy();
+        }
+
+        window.incomeChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: '收入',
+                        data: dataPts,
+                        borderColor: '#a04b3f',
+                        backgroundColor: '#a04b3f',
+                        borderWidth: 2,
+                        pointStyle: 'rectRot',
+                        pointRadius: 3,
+                        fill: false,
+                        order: 1,
+                        tension: 0
+                    },
+                    {
+                        label: '趨勢線',
+                        data: trendPts,
+                        borderColor: '#8fae86',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: false,
+                        order: 2,
+                        tension: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: { padding: { top: 10 } },
+                plugins: {
+                    title: { display: true, text: '收入趨勢', font: { size: 13, weight: 'normal' }, color: '#5b4a37' },
+                    legend: { display: false }
+                },
+                scales: {
+                    x: { ticks: { maxRotation: 90, minRotation: 90, color: '#5b4a37', font:{size:9} }, grid: { display: false } },
+                    y: { beginAtZero: true, grid: { color: '#e4ded0' }, ticks:{font:{size:9}} }
+                }
+            }
+        });
+    }
+
+    renderCalendar();
+
+    /* ============================================================
+       實際收入紀錄表
+    ============================================================ */
+    const defaultData = [
+        { date: "2026-07-13", student: "Thomas", fee: "700台幣", remitted: "", actual: "", rate: "", twd: "3500", convTwd: "3500", classes: "5", method: "現金-國泰", avg: "700", ppFee: "", ppRate: "", notes: "" },
+        { date: "2026-07-17", student: "Mauricio毛睿修", fee: "400披索", remitted: "4000", actual: "4000", rate: "1.8515", twd: "", convTwd: "7406", classes: "10", method: "海產代轉", avg: "741", ppFee: "", ppRate: "", notes: "墨西哥披索" },
+        { date: "2026-07-18", student: "Nicole", fee: "18", remitted: "18", actual: "16.91", rate: "29", twd: "", convTwd: "490.39", classes: "1", method: "PayPal", avg: "490", ppFee: "1.09", ppRate: "0.0605", notes: "" },
+        { date: "2026-07-31", student: "Alberto", fee: "350披索", remitted: "3500", actual: "3500", rate: "1.86", twd: "", convTwd: "6510", classes: "10", method: "海產代轉", avg: "651", ppFee: "", ppRate: "", notes: "墨西哥披索" },
+        { date: "2026-08-03", student: "Mirna", fee: "325披索", remitted: "650", actual: "650", rate: "1.8569", twd: "", convTwd: "1207", classes: "2", method: "海產代轉", avg: "604", ppFee: "", ppRate: "", notes: "墨西哥披索" },
+        { date: "2026-08-04", student: "西班牙文Anita", fee: "200台幣", remitted: "", actual: "", rate: "", twd: "800", convTwd: "800", classes: "4", method: "現金-國泰", avg: "200", ppFee: "", ppRate: "", notes: "" },
+        { date: "2026-08-07", student: "Alexa", fee: "350披索", remitted: "3500", actual: "3500", rate: "1.8708", twd: "", convTwd: "6548", classes: "10", method: "海產代轉", avg: "655", ppFee: "", ppRate: "", notes: "墨西哥披索" },
+        { date: "2026-08-08", student: "Nicole", fee: "18", remitted: "18", actual: "16.91", rate: "29", twd: "", convTwd: "490.39", classes: "1", method: "PayPal", avg: "490", ppFee: "1.09", ppRate: "0.0605", notes: "" }
+    ];
+
+    let records = JSON.parse(localStorage.getItem('actualIncomeRecords'));
+    if (!records || records.length === 0) {
+        records = defaultData;
+        saveData();
+    }
+
+    function saveData() {
+        localStorage.setItem('actualIncomeRecords', JSON.stringify(records));
+        renderSummary();
+    }
+
+    function getMonthColorClass(dateStr) {
+        if (!dateStr) return '';
+        const month = parseInt(dateStr.split('-')[1], 10);
+        if (isNaN(month)) return '';
+        const colors = ['month-color-1', 'month-color-2', 'month-color-3', 'month-color-4', 'month-color-5'];
+        return colors[(month - 1) % 5];
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('record-tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        let sumConvTwd = 0;
+
+        records.forEach((row, index) => {
+            const tr = document.createElement('tr');
+            const colorClass = getMonthColorClass(row.date);
+            tr.className = colorClass;
+
+            tr.innerHTML = `
+                <td><input type="date" value="${row.date}" onchange="updateRow(${index}, 'date', this.value)"></td>
+                <td><input type="text" value="${row.student}" onchange="updateRow(${index}, 'student', this.value)"></td>
+                <td><input type="text" value="${row.fee}" onchange="updateRow(${index}, 'fee', this.value)"></td>
+                <td><input type="number" step="0.01" value="${row.remitted}" oninput="autoCalculate(${index}, 'remitted', this.value)"></td>
+                <td><input type="number" step="0.01" value="${row.actual}" oninput="autoCalculate(${index}, 'actual', this.value)"></td>
+                <td><input type="number" step="0.0001" value="${row.rate}" oninput="autoCalculate(${index}, 'rate', this.value)"></td>
+                <td><input type="number" value="${row.twd}" oninput="autoCalculate(${index}, 'twd', this.value)"></td>
+                <td><input type="number" class="readonly-cell" readonly value="${row.convTwd}"></td>
+                <td><input type="number" value="${row.classes}" oninput="autoCalculate(${index}, 'classes', this.value)"></td>
+                <td><input type="text" value="${row.method}" onchange="updateRow(${index}, 'method', this.value)"></td>
+                <td><input type="number" class="readonly-cell" readonly value="${row.avg}"></td>
+                <td><input type="number" class="readonly-cell" readonly value="${row.ppFee}"></td>
+                <td><input type="number" class="readonly-cell" readonly value="${row.ppRate}"></td>
+                <td><input type="text" value="${row.notes}" onchange="updateRow(${index}, 'notes', this.value)"></td>
+                <td style="background:#fff;"><button class="btn-delete" onclick="deleteRow(${index})" title="刪除">✖</button></td>
+            `;
+            tbody.appendChild(tr);
+
+            sumConvTwd += parseFloat(row.convTwd) || 0;
+        });
+
+        const totalConvertedElem = document.getElementById('totalConvertedTwd');
+        if (totalConvertedElem) {
+            totalConvertedElem.textContent = Math.round(sumConvTwd);
+        }
+    }
+
+    function addRow() {
+        records.push({ date: "", student: "", fee: "", remitted: "", actual: "", rate: "", twd: "", convTwd: "", classes: "", method: "", avg: "", ppFee: "", ppRate: "", notes: "" });
+        renderTable();
+        saveData();
+    }
+
+    function deleteRow(index) {
+        if(confirm('確定要刪除這筆紀錄嗎？')) {
+            records.splice(index, 1);
+            renderTable();
+            saveData();
+        }
+    }
+
+    function updateRow(index, field, value) {
+        records[index][field] = value;
+        if (field === 'date') renderTable();
+        saveData();
+    }
+
+    function autoCalculate(index, field, value) {
+        records[index][field] = value;
+        let r = records[index];
+
+        let rem = parseFloat(r.remitted);
+        let act = parseFloat(r.actual);
+        if (!isNaN(rem) && !isNaN(act) && rem > 0 && rem !== act) {
+            let fee = rem - act;
+            r.ppFee = fee.toFixed(2);
+            r.ppRate = (fee / rem).toFixed(6);
+        } else {
+            r.ppFee = "";
+            r.ppRate = "";
+        }
+
+        let rate = parseFloat(r.rate);
+        let twd = parseFloat(r.twd);
+        if (!isNaN(act) && !isNaN(rate)) {
+            r.convTwd = Math.round(act * rate).toString();
+        } else if (!isNaN(twd)) {
+            r.convTwd = twd.toString();
+        } else {
+            r.convTwd = "";
+        }
+
+        let conv = parseFloat(r.convTwd);
+        let cls = parseFloat(r.classes);
+        if (!isNaN(conv) && !isNaN(cls) && cls > 0) {
+            r.avg = Math.round(conv / cls).toString();
+        } else {
+            r.avg = "";
+        }
+
+        renderTable();
+        saveData();
+    }
+
+    function renderSummary() {
+        const target = document.getElementById('summary-area');
+        if (!target) return;
+
+        let summaryMap = {};
+        let yearsSet = new Set();
+
+        records.forEach(r => {
+            if (!r.date) return;
+            const parts = r.date.split('-');
+            if (parts.length < 2) return;
+            const rocYear = parseInt(parts[0]) - 1911;
+            const month = parseInt(parts[1]);
+            const val = parseFloat(r.convTwd);
+
+            if (isNaN(rocYear) || isNaN(month) || isNaN(val)) return;
+
+            yearsSet.add(rocYear);
+            if (!summaryMap[rocYear]) summaryMap[rocYear] = {};
+            if (!summaryMap[rocYear][month]) summaryMap[rocYear][month] = 0;
+            summaryMap[rocYear][month] += val;
+        });
+
+        let sortedYears = Array.from(yearsSet).sort((a, b) => a - b);
+        if (sortedYears.length === 0) {
+            const currentRocYear = new Date().getFullYear() - 1911;
+            sortedYears = [currentRocYear - 1, currentRocYear, currentRocYear + 1];
+        }
+
+        let html = '<table class="summary-table2">';
+        html += '<thead><tr>';
+        sortedYears.forEach(y => {
+            html += `<th class="header-cell" colspan="2">${y}年</th>`;
+        });
+        html += '</tr></thead><tbody>';
+
+        let totals = {};
+        sortedYears.forEach(y => totals[y] = 0);
+        let activeMonths = {};
+        sortedYears.forEach(y => activeMonths[y] = 0);
+
+        for (let m = 1; m <= 12; m++) {
+            html += '<tr>';
+            sortedYears.forEach(y => {
+                let val = summaryMap[y] && summaryMap[y][m] ? summaryMap[y][m] : 0;
+                totals[y] += val;
+                if (val > 0) activeMonths[y]++;
+
+                html += `<td class="header-cell">${y}年${m}月</td>`;
+                html += `<td class="data-cell">${val > 0 ? Math.round(val) : ''}</td>`;
+            });
+            html += '</tr>';
+        }
+
+        html += '<tr>';
+        sortedYears.forEach(y => {
+            html += `<td class="total-cell">共計</td>`;
+            html += `<td class="data-cell">${Math.round(totals[y])}</td>`;
+        });
+        html += '</tr>';
+
+        html += '<tr>';
+        sortedYears.forEach(y => {
+            let avg = activeMonths[y] > 0 ? Math.round(totals[y] / activeMonths[y]) : 0;
+            html += `<td class="avg-cell">平均每月</td>`;
+            html += `<td class="data-cell">${avg}</td>`;
+        });
+        html += '</tr>';
+
+        html += '</tbody></table>';
+        target.innerHTML = html;
+    }
+
+    function exportData() {
+        const dataStr = JSON.stringify(records, null, 2);
+        const blob = new Blob([dataStr], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '實際收入紀錄.json';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    /* ============================================================
+       匯入 Excel / CSV 舊資料
+    ============================================================ */
+    const EXCEL_FIELD_SYNONYMS = {
+        date:     ['收款日', '日期', 'date'],
+        student:  ['學生姓名', '學生', 'student', 'name'],
+        fee:      ['每堂收費', '收費', 'fee'],
+        remitted: ['匯入金額', 'remitted'],
+        actual:   ['實收金額', 'actual'],
+        rate:     ['匯率', 'rate'],
+        twd:      ['台幣', 'twd'],
+        convTwd:  ['換算台幣', 'convtwd'],
+        classes:  ['購買堂數', '堂數', 'classes'],
+        method:   ['匯款方式', 'method'],
+        avg:      ['平均每堂', '平均', 'avg'],
+        ppFee:    ['paypal手續費', 'ppfee'],
+        ppRate:   ['paypal手續費率', 'pprate'],
+        notes:    ['備考', '備註', 'notes']
+    };
+
+    function normalizeHeader(h) {
+        return String(h).toLowerCase().replace(/[\s()（）\/／、,，]/g, '');
+    }
+
+    function buildExcelHeaderMap(headers) {
+        const map = {};
+        const normalized = headers.map(h => ({ raw: h, norm: normalizeHeader(h) }));
+        Object.keys(EXCEL_FIELD_SYNONYMS).forEach(field => {
+            const synonyms = EXCEL_FIELD_SYNONYMS[field].map(normalizeHeader);
+            const found = normalized.find(h => synonyms.some(s => h.norm.includes(s)));
+            if (found) map[field] = found.raw;
+        });
+        return map;
+    }
+
+    function excelDateToStr(val) {
+        if (val instanceof Date && !isNaN(val)) {
+            const y = val.getFullYear(), m = String(val.getMonth() + 1).padStart(2, '0'), d = String(val.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+        if (typeof val === 'number' && window.XLSX && XLSX.SSF) {
+            const parsed = XLSX.SSF.parse_date_code(val);
+            if (parsed) return `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`;
+        }
+        return String(val || '').trim();
+    }
+
+    function importExcel(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                const sheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[sheetName];
+                const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+                if (!rows.length) {
+                    alert('這個檔案裡沒有找到資料，請確認第一列是欄位標題。');
+                    return;
+                }
+
+                const headerMap = buildExcelHeaderMap(Object.keys(rows[0]));
+                if (!headerMap.date && !headerMap.student) {
+                    alert('無法辨識欄位標題（找不到「收款日」或「學生」欄位），請確認 Excel 第一列是標題列。');
+                    return;
+                }
+
+                let importCount = 0;
+                rows.forEach(row => {
+                    const rec = { date: '', student: '', fee: '', remitted: '', actual: '', rate: '', twd: '', convTwd: '', classes: '', method: '', avg: '', ppFee: '', ppRate: '', notes: '' };
+                    Object.keys(headerMap).forEach(field => {
+                        const col = headerMap[field];
+                        let val = row[col];
+                        if (val === undefined || val === null) return;
+                        if (field === 'date') {
+                            rec.date = excelDateToStr(val);
+                        } else {
+                            rec[field] = String(val).trim();
+                        }
+                    });
+                    if (rec.date || rec.student) {
+                        records.push(rec);
+                        importCount++;
+                    }
+                });
+
+                renderTable();
+                saveData();
+                alert(`已匯入 ${importCount} 筆資料到最下方，請檢查後再確認保存。`);
+            } catch (err) {
+                console.error(err);
+                alert('匯入失敗，請確認檔案格式是否為 .xlsx / .xls / .csv。');
+            } finally {
+                event.target.value = '';
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    renderTable();
+    renderSummary();
+</script>
+</body>
+</html>
