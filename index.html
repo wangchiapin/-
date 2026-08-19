@@ -167,6 +167,29 @@
         width:26px; height:20px; border:1px solid var(--forest-line); border-radius:4px;
         cursor:pointer; padding:0; background:transparent;
     }
+    .color-swatch-btn{
+        width:26px; height:20px; border:1px solid var(--forest-line); border-radius:4px;
+        cursor:pointer; padding:0;
+    }
+    .color-swatch-btn:hover{box-shadow:0 0 0 2px var(--forest-gold-pale);}
+    .color-popover{
+        position:fixed; z-index:300; background:var(--forest-card); border:1px solid var(--forest-line);
+        border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.2); padding:8px; display:none;
+    }
+    .color-popover.open{display:block;}
+    .color-popover-grid{display:grid; grid-template-columns:repeat(6, 1fr); gap:5px;}
+    .color-popover-swatch{
+        width:20px; height:20px; border-radius:4px; border:1px solid var(--forest-line); cursor:pointer;
+    }
+    .color-popover-swatch:hover{box-shadow:0 0 0 2px var(--forest-gold); transform:scale(1.1);}
+    .color-popover-custom{
+        margin-top:8px; padding-top:8px; border-top:1px solid var(--forest-line);
+        display:flex; align-items:center; gap:6px; font-size:11px; color:var(--forest-bark);
+    }
+    .color-popover-custom input[type="color"]{
+        width:28px; height:20px; padding:0; border:1px solid var(--forest-line); border-radius:4px;
+        cursor:pointer; background:none;
+    }
 
     /* ===== 日曆 ===== */
     .controls{
@@ -197,11 +220,14 @@
         display:flex; align-items:center; justify-content:center;
         border-bottom:1px solid var(--forest-line); font-weight:700;
     }
-    .input-cell{height:16px; border:1px solid var(--forest-line); box-sizing:border-box; margin:0 2px;}
+    .input-cell{
+        height:22px; border:1px solid var(--forest-line); box-sizing:border-box; margin:0 2px;
+        background:var(--forest-card);
+    }
     .input-cell input{
         width:100%; height:100%; border:none; text-align:center;
-        font-size:11px; outline:none; background:transparent; color:var(--forest-deep); font-family:inherit;
-        padding:0;
+        font-size:11px; line-height:20px; outline:none; background:transparent; color:var(--forest-deep); font-family:inherit;
+        padding:0; box-sizing:border-box; vertical-align:middle;
     }
     .input-cell input:focus{background-color:var(--forest-gold-pale);}
     .empty-day{background:#efece0;}
@@ -361,6 +387,13 @@
         <span class="sub">每天一分鐘 · 教學收入管理</span>
     </div>
     <button class="btn-nav" id="navBtn" onclick="toggleView()">查看實際收入紀錄 →</button>
+</div>
+
+<div class="color-popover" id="colorPopover" onclick="event.stopPropagation()">
+    <div class="color-popover-grid" id="colorPopoverGrid"></div>
+    <div class="color-popover-custom">
+        自訂色<input type="color" id="colorPopoverCustom" onchange="customColorChange(this.value)" title="自訂顏色">
+    </div>
 </div>
 
 <!-- ===================== 主頁：每日上課收入與學生收費紀錄表 ===================== -->
@@ -531,7 +564,7 @@
                 </td>
                 <td><input type="text" value="${student.fee}" onchange="updateStudent(${index}, 'fee', this.value)"></td>
                 <td><input type="text" value="${student.twd}" onchange="updateStudent(${index}, 'twd', this.value)"></td>
-                <td><input type="color" class="color-swatch" value="${toHexColor(student.bg)}" onchange="updateStudentColor(${index}, this.value)" title="選擇顏色"></td>
+                <td><button type="button" class="color-swatch-btn" style="background-color:${toHexColor(student.bg)};" onclick="openColorPicker(event, ${index})" title="選擇顏色"></button></td>
                 <td><button class="delete-btn" onclick="removeStudent(${index})" title="刪除">&times;</button></td>
             `;
             tbody.appendChild(tr);
@@ -556,6 +589,54 @@
         ctx.fillStyle = color;
         return ctx.fillStyle;
     }
+
+    /* ===== 顏色選擇彈出面板（取代原生色盤，節省空間） ===== */
+    const PRESET_SWATCH_COLORS = [
+        '#8fae86', '#a9c2e6', '#a8c2c2', '#f3e6c4', '#d9e1cf', '#e6c9c4',
+        '#dfe9d8', '#ccc0da', '#e6b8b7', '#e4dfec', '#c39a45', '#8ea9db',
+        '#f5cba7', '#d5a6bd', '#a2d9ce', '#f9e79f', '#ffffff', '#eaeaea'
+    ];
+    let colorPickerIndex = null;
+
+    function openColorPicker(evt, index) {
+        evt.stopPropagation();
+        colorPickerIndex = index;
+        const popover = document.getElementById('colorPopover');
+        const grid = document.getElementById('colorPopoverGrid');
+        grid.innerHTML = PRESET_SWATCH_COLORS.map(c =>
+            `<div class="color-popover-swatch" style="background:${c};" onclick="selectPresetColor('${c}')" title="${c}"></div>`
+        ).join('');
+        document.getElementById('colorPopoverCustom').value = toHexColor(studentData[index].bg);
+
+        const rect = evt.currentTarget.getBoundingClientRect();
+        popover.style.top = (rect.bottom + 4) + 'px';
+        popover.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
+        popover.classList.add('open');
+    }
+
+    function selectPresetColor(color) {
+        if (colorPickerIndex === null) return;
+        updateStudentColor(colorPickerIndex, color);
+        closeColorPicker();
+    }
+
+    function customColorChange(value) {
+        if (colorPickerIndex === null) return;
+        updateStudentColor(colorPickerIndex, value);
+    }
+
+    function closeColorPicker() {
+        const popover = document.getElementById('colorPopover');
+        if (popover) popover.classList.remove('open');
+        colorPickerIndex = null;
+    }
+
+    document.addEventListener('click', function (e) {
+        const popover = document.getElementById('colorPopover');
+        if (popover && popover.classList.contains('open') && !popover.contains(e.target)) {
+            closeColorPicker();
+        }
+    });
 
     function addStudent() {
         studentData.push({name: "", fee: "", twd: "", bg: "#ffffff"});
@@ -654,6 +735,50 @@
         incomeData[date][index] = inputElem.value;
         saveIncomeData();
     }
+
+    /* ===== 鍵盤導覽：Enter / 方向鍵在表格內移動，不再改變數字大小 ===== */
+    function findIncomeInput(dateStr, idx) {
+        return document.querySelector(`.input-cell input[data-date="${dateStr}"][data-index="${idx}"]`);
+    }
+
+    function shiftDateStr(dateStr, deltaDays) {
+        const d = new Date(dateStr + 'T00:00:00');
+        d.setDate(d.getDate() + deltaDays);
+        const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
+
+    function handleIncomeInputKeydown(e) {
+        const input = e.target;
+        const date = input.getAttribute('data-date');
+        const idx = parseInt(input.getAttribute('data-index'), 10);
+        let target = null;
+
+        if (e.key === 'Enter' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            target = (idx < 5) ? findIncomeInput(date, idx + 1) : findIncomeInput(shiftDateStr(date, 1), 0);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            target = (idx > 0) ? findIncomeInput(date, idx - 1) : findIncomeInput(shiftDateStr(date, -1), 5);
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            target = findIncomeInput(shiftDateStr(date, -1), idx);
+        } else if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            target = findIncomeInput(shiftDateStr(date, 1), idx);
+        }
+
+        if (target) {
+            target.focus();
+            target.select();
+        }
+    }
+
+    document.getElementById('calendar-area').addEventListener('keydown', function (e) {
+        if (e.target.matches('.input-cell input')) {
+            handleIncomeInputKeydown(e);
+        }
+    });
 
     // 計算所有月份的統計資料，回傳共用結構供 mini / 完整版使用
     function buildMonthlySummaryData() {
