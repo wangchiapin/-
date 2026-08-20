@@ -10,49 +10,60 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <!-- ============================================================
-     Firebase 基本設定（骨架，之後自行填入 config 與同步邏輯）
-     用法：
-       1. 到 Firebase 主控台建立專案，開啟 Firestore
-       2. 把下面 firebaseConfig 換成你自己的專案設定
-       3. window.firebaseDb 之後可在其他 <script> 裡直接使用
+     Firebase 設定：與「生活帳本 moneybook」共用同一個 Firebase 專案
+     這裡同時初始化 Firestore 與 Auth，並負責把「實際收入與匯款紀錄」
+     的每月「換算台幣」總額，同步寫入 moneybook 的 ledgers/{uid} 文件裡
+     的 incomes 陣列（source: "華語文教學"）。
 ============================================================ -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-    // TODO: 請換成你自己的 Firebase 專案設定（Firebase 主控台 → 專案設定 → 一般 → 你的應用程式）
+    // 與 moneybook (wangchiapin.github.io/moneybook) 相同的 Firebase 專案設定
     const firebaseConfig = {
-        apiKey: "YOUR_API_KEY",
-        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-        projectId: "YOUR_PROJECT_ID",
-        storageBucket: "YOUR_PROJECT_ID.appspot.com",
-        messagingSenderId: "YOUR_SENDER_ID",
-        appId: "YOUR_APP_ID"
+        apiKey: "AIzaSyDB6zYAHvi0oTkObv-qDnP6nn0UUnscby0",
+        authDomain: "moneybook-50481.firebaseapp.com",
+        projectId: "moneybook-50481",
+        storageBucket: "moneybook-50481.firebasestorage.app",
+        messagingSenderId: "549256761796",
+        appId: "1:549256761796:web:254332f109e7b8ad871491",
+        measurementId: "G-XTDYYS4HK6"
     };
 
-    // 尚未填入正式設定前，先不初始化，避免 console 報錯干擾使用
-    const isConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
 
-    if (isConfigured) {
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        window.firebaseApp = app;
-        window.firebaseDb = db;
-        window.firebaseDoc = doc;
-        window.firebaseSetDoc = setDoc;
-        window.firebaseGetDoc = getDoc;
-        console.log('Firebase 已連線');
+    window.firebaseApp = app;
+    window.firebaseDb = db;
+    window.firebaseAuth = auth;
+    window.firebaseDoc = doc;
+    window.firebaseSetDoc = setDoc;
+    window.firebaseGetDoc = getDoc;
+    window.firebaseSignIn = signInWithEmailAndPassword;
+    window.firebaseSignOut = signOut;
 
-        // 之後可以在這裡（或另一個 script）加上同步函式，例如：
-        // async function syncRecordsToFirestore() {
-        //     await setDoc(doc(db, 'teaching', 'actualIncomeRecords'), { records });
-        // }
-        // async function syncIncomeDataToFirestore() {
-        //     await setDoc(doc(db, 'teaching', 'classIncomeData'), { incomeData });
-        // }
-    } else {
-        console.log('Firebase 尚未設定，目前僅使用 localStorage 儲存資料');
-    }
+    // 目前登入使用者 uid，以及從 Firestore 讀到的 moneybook incomes 陣列（保留其他收入來源用）
+    window.ledgerUid = null;
+    window.ledgerIncomes = null;
+
+    onAuthStateChanged(auth, (user) => {
+        window.ledgerUid = user ? user.uid : null;
+        if (window.onLedgerAuthChanged) window.onLedgerAuthChanged(user);
+
+        if (user) {
+            const ref = doc(db, "ledgers", user.uid);
+            onSnapshot(ref, (snap) => {
+                const data = snap.data() || {};
+                window.ledgerIncomes = data.incomes || [];
+            }, (err) => {
+                console.error('讀取生活帳本資料失敗', err);
+            });
+        } else {
+            window.ledgerIncomes = null;
+        }
+    });
 </script>
 
 <style>
@@ -135,6 +146,21 @@
         box-shadow:0 3px 10px rgba(91,74,55,0.10);
         border:1px solid var(--forest-line);
     }
+
+    /* ===== 同步列 ===== */
+    .sync-bar{
+        max-width:1500px; margin:0 auto 14px; padding:8px 16px;
+        display:flex; align-items:center; justify-content:space-between;
+        font-size:12px; color:var(--forest-bark); flex-wrap:wrap; gap:8px;
+    }
+    .sync-bar .sync-actions{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+    .btn-sync{
+        font-family:'Noto Sans TC',sans-serif; border:1px solid var(--forest-mid);
+        background:var(--forest-card); color:var(--forest-mid);
+        padding:5px 12px; border-radius:14px; font-weight:700; font-size:11px; cursor:pointer;
+    }
+    .btn-sync:hover{background:var(--forest-pale);}
+    .btn-sync.primary{background:var(--forest-light); color:var(--forest-deep); border:none;}
 
     /* ===== 主頁三欄 ===== */
     .main-wrapper{
@@ -459,6 +485,16 @@
     </div>
 </div>
 
+<div class="card sync-bar">
+    <div id="syncStatusText">🔄 檢查生活帳本登入狀態中...</div>
+    <div class="sync-actions">
+        <span id="syncTimeText"></span>
+        <button class="btn-sync primary" id="syncLoginBtn" onclick="openSyncLoginModal()">登入生活帳本帳號</button>
+        <button class="btn-sync" id="syncLogoutBtn" style="display:none;" onclick="doSyncLogout()">登出</button>
+        <button class="btn-sync" id="syncNowBtn" style="display:none;" onclick="syncTeachingIncomeNow()">立即同步</button>
+    </div>
+</div>
+
 <div class="color-popover" id="colorPopover" onclick="event.stopPropagation()">
     <div class="color-popover-grid" id="colorPopoverGrid"></div>
     <div class="color-popover-custom">
@@ -525,7 +561,8 @@
     <button class="btn" onclick="document.getElementById('excelImportInput').click()" style="float:right; margin-right:8px; background:var(--forest-gold-pale);">📥 匯入 Excel</button>
     <input type="file" id="excelImportInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importExcel(event)">
     <div style="clear:both; font-size:11px; color:var(--forest-bark); margin:-4px 0 10px;">
-        支援 .xlsx / .xls / .csv，會自動辨識「收款日、學生、每堂收費、匯入金額、實收金額、匯率、台幣、換算台幣、購買堂數、匯款方式、備考」等欄位標題並附加到下方紀錄後面
+        支援 .xlsx / .xls / .csv，會自動辨識「收款日、學生、每堂收費、匯入金額、實收金額、匯率、台幣、換算台幣、購買堂數、匯款方式、備考」等欄位標題並附加到下方紀錄後面<br>
+        每次新增／修改／刪除紀錄後，會自動把每個月「換算台幣」總額同步到生活帳本 moneybook 的「華語文教學」收入（需先在上方登入生活帳本帳號）。
     </div>
 
     <div class="record-table-wrap" id="recordTableWrap">
@@ -578,6 +615,20 @@
             </div>
             <div id="ai-result" style="margin-top:14px; white-space:pre-wrap; line-height:1.75; font-size:13px; color:var(--forest-deep);"></div>
         </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="syncLoginModal" onclick="if(event.target===this) closeSyncLoginModal();">
+    <div class="modal-box" style="max-width:380px;">
+        <h3>🔗 登入生活帳本帳號<button class="modal-close" onclick="closeSyncLoginModal()">關閉</button></h3>
+        <div style="font-size:12px; color:var(--forest-bark); margin-bottom:12px; line-height:1.6;">
+            請用跟 moneybook 生活帳本相同的帳號（Email／密碼）登入。登入後，這台裝置上這個網頁往後每次修改「實際收入與匯款紀錄」，都會自動把每月「換算台幣」總額同步為 moneybook 裡「華語文教學」的本月收入（moneybook 端該欄位會改為唯讀）。<br><br>
+            登入狀態會保留在這個瀏覽器裡，之後不用每次重新登入。
+        </div>
+        <input type="email" id="syncEmail" placeholder="Email" autocomplete="username" style="width:100%; box-sizing:border-box; border:1px solid var(--forest-line); border-radius:8px; padding:9px 10px; font-size:13px; margin-bottom:8px; font-family:inherit;">
+        <input type="password" id="syncPassword" placeholder="密碼" autocomplete="current-password" style="width:100%; box-sizing:border-box; border:1px solid var(--forest-line); border-radius:8px; padding:9px 10px; font-size:13px; margin-bottom:10px; font-family:inherit;">
+        <div id="syncLoginError" style="color:var(--forest-berry); font-size:12px; margin-bottom:8px; min-height:14px;"></div>
+        <button class="btn btn-add" style="width:100%; margin-bottom:0;" onclick="doSyncLogin()">登入</button>
     </div>
 </div>
 
@@ -1406,6 +1457,7 @@ ${recentTrend.join('\n')}
     function saveData() {
         localStorage.setItem('actualIncomeRecords', JSON.stringify(records));
         renderSummary();
+        scheduleTeachingIncomeSync();
     }
 
     function getMonthColorClass(dateStr) {
@@ -1791,6 +1843,143 @@ ${recentTrend.join('\n')}
 
     renderTable();
     renderSummary();
+
+    /* ============================================================
+       與生活帳本 moneybook 同步「華語文教學」本月收入
+       ------------------------------------------------------------
+       原理：
+         1. 依「實際收入與匯款紀錄」的 date 欄位（YYYY-MM-DD），
+            以 YYYY-MM 為月份 key，把每筆的「換算台幣」加總
+         2. 讀出 moneybook 目前 ledgers/{uid} 文件裡的 incomes 陣列，
+            移除所有 source === "華語文教學" 的項目，換成剛剛算出來
+            的每月新資料，其他收入來源（股票投資／交割折讓）維持不動
+         3. 把新的 incomes 陣列寫回 Firestore（merge，不影響其他欄位）
+       ------------------------------------------------------------
+       需要登入 moneybook 同一組帳號，因為 Firestore 規則通常只允許
+       request.auth.uid 本人讀寫自己的 ledgers/{uid} 文件。
+    ============================================================ */
+
+    function openSyncLoginModal() {
+        document.getElementById('syncLoginModal').classList.add('open');
+        document.getElementById('syncLoginError').textContent = '';
+    }
+
+    function closeSyncLoginModal() {
+        document.getElementById('syncLoginModal').classList.remove('open');
+    }
+
+    async function doSyncLogin() {
+        const email = document.getElementById('syncEmail').value.trim();
+        const password = document.getElementById('syncPassword').value;
+        const errEl = document.getElementById('syncLoginError');
+        if (!email || !password) {
+            errEl.textContent = '請輸入 Email 與密碼。';
+            return;
+        }
+        errEl.textContent = '登入中...';
+        try {
+            await window.firebaseSignIn(window.firebaseAuth, email, password);
+            errEl.textContent = '';
+            document.getElementById('syncPassword').value = '';
+            closeSyncLoginModal();
+        } catch (e) {
+            console.error(e);
+            errEl.textContent = '登入失敗，請確認 Email 與密碼是否正確（跟 moneybook 用同一組帳號）。';
+        }
+    }
+
+    async function doSyncLogout() {
+        try {
+            await window.firebaseSignOut(window.firebaseAuth);
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    function updateSyncBarUI(user) {
+        const statusEl = document.getElementById('syncStatusText');
+        const loginBtn = document.getElementById('syncLoginBtn');
+        const logoutBtn = document.getElementById('syncLogoutBtn');
+        const nowBtn = document.getElementById('syncNowBtn');
+        if (!statusEl) return;
+
+        if (user) {
+            statusEl.textContent = `✅ 已登入生活帳本（${user.email}），修改實際收入紀錄會自動同步「華語文教學」收入`;
+            loginBtn.style.display = 'none';
+            logoutBtn.style.display = 'inline-block';
+            nowBtn.style.display = 'inline-block';
+        } else {
+            statusEl.textContent = '⚪ 尚未登入生活帳本帳號，目前不會同步「華語文教學」收入';
+            loginBtn.style.display = 'inline-block';
+            logoutBtn.style.display = 'none';
+            nowBtn.style.display = 'none';
+        }
+    }
+
+    // 每個月「換算台幣」加總（key 為 YYYY-MM，跟 moneybook 的月份格式一致）
+    function computeTeachingMonthlyTotals() {
+        const totals = {};
+        records.forEach(r => {
+            if (!r.date || r.date.length < 7) return;
+            const mk = r.date.slice(0, 7);
+            const val = parseFloat(r.convTwd);
+            if (isNaN(val)) return;
+            totals[mk] = (totals[mk] || 0) + val;
+        });
+        return totals;
+    }
+
+    let syncDebounceTimer = null;
+    function scheduleTeachingIncomeSync() {
+        if (!window.ledgerUid) return; // 尚未登入就先不動作，等使用者登入後會補一次同步
+        clearTimeout(syncDebounceTimer);
+        syncDebounceTimer = setTimeout(syncTeachingIncomeNow, 900);
+    }
+
+    async function syncTeachingIncomeNow() {
+        if (!window.ledgerUid) {
+            openSyncLoginModal();
+            return;
+        }
+        const statusEl = document.getElementById('syncStatusText');
+        const timeEl = document.getElementById('syncTimeText');
+        try {
+            if (statusEl) statusEl.textContent = '🔄 同步中...';
+            const totals = computeTeachingMonthlyTotals();
+            const ref = window.firebaseDoc(window.firebaseDb, 'ledgers', window.ledgerUid);
+
+            const currentIncomes = window.ledgerIncomes || [];
+            const others = currentIncomes.filter(i => i.source !== '華語文教學');
+            const teachingEntries = Object.keys(totals)
+                .filter(mk => totals[mk] !== 0)
+                .map(mk => ({
+                    id: 'teaching_' + mk,
+                    month: mk,
+                    source: '華語文教學',
+                    amount: Math.round(totals[mk])
+                }));
+            const nextIncomes = [...others, ...teachingEntries];
+
+            await window.firebaseSetDoc(ref, { incomes: nextIncomes, updatedAt: Date.now() }, { merge: true });
+            window.ledgerIncomes = nextIncomes;
+
+            const user = window.firebaseAuth && window.firebaseAuth.currentUser;
+            updateSyncBarUI(user);
+            const now = new Date();
+            if (timeEl) timeEl.textContent = `最後同步 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        } catch (e) {
+            console.error(e);
+            if (statusEl) statusEl.textContent = '❌ 同步失敗，請檢查網路連線，或重新登入生活帳本帳號';
+        }
+    }
+
+    window.onLedgerAuthChanged = function (user) {
+        updateSyncBarUI(user);
+        if (user) {
+            // 登入（或重新整理頁面後自動登入）時，補做一次同步，確保資料是最新的
+            scheduleTeachingIncomeSync();
+        }
+    };
 </script>
 </body>
 </html>
