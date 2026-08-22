@@ -752,6 +752,50 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 .export-wrap td.ec{border:1px solid var(--forest-line);padding:2px;height:36px;vertical-align:middle}
 .export-libre{background:var(--forest-gold-pale);height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--forest-bark);border-radius:4px}
 .export-busy{background:var(--forest-bark);height:100%;border-radius:4px}
+
+/* ===== 以下為「學生上課狀況管理系統」分頁樣式（統一加上 #studentsTab 前綴避免與上方樣式衝突）===== */
+#studentsTab .top-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+#studentsTab .top-bar h1{font-family:'Noto Serif TC',serif;font-size:17px;font-weight:700;color:#f5f2e6;display:flex;align-items:center;gap:8px;letter-spacing:0.5px}
+#studentsTab button{font-family:'Noto Sans TC',sans-serif;font-size:12px;padding:6px 14px;border-radius:16px;border:1px solid var(--forest-mid);background:var(--forest-card);color:var(--forest-mid);cursor:pointer;font-weight:700;transition:0.2s}
+#studentsTab button:hover{background:var(--forest-pale)}
+#studentsTab button.danger{color:#fff;background:var(--forest-berry);border-color:var(--forest-berry)}
+#studentsTab button.danger:hover{background:#8a3f34}
+#studentsTab button.primary{color:#fff;background:var(--forest-mid);border-color:var(--forest-mid)}
+#studentsTab button.primary:hover{background:#345a3d}
+#studentsTab button.export-btn{background:var(--forest-gold-pale);color:var(--forest-bark);border-color:var(--forest-gold)}
+#studentsTab button.export-btn:hover{background:var(--forest-gold)}
+#studentsTab button:disabled{opacity:0.5;cursor:not-allowed}
+#studentsTab .save-status{font-size:11px;color:var(--forest-light);margin-left:4px}
+#studentsTab .save-status.saved{color:var(--forest-light)}
+#studentsTab .save-status.saving{color:var(--forest-gold-pale)}
+#studentsTab .sec{font-family:'Noto Serif TC',serif;font-size:14px;font-weight:700;color:var(--forest-mid);margin:18px 0 8px;padding-bottom:6px;border-bottom:2px solid var(--forest-pale);display:flex;align-items:center;gap:6px}
+#studentsTab .view-toggle{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+#studentsTab .student-select{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+#studentsTab .student-select select{padding:7px 10px;font-size:13px;min-width:220px;border-radius:8px;border:1px solid var(--forest-line);background:#fff;color:var(--forest-deep);font-family:inherit}
+#studentsTab .basic-card{background:var(--forest-card);border:1px solid var(--forest-line);border-radius:10px;padding:16px 18px;box-shadow:0 3px 10px rgba(91,74,55,0.10);margin-bottom:16px}
+#studentsTab #stdBasicInfoForm{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+#studentsTab .form-group{display:flex;flex-direction:column}
+#studentsTab .form-group label{margin-bottom:4px;font-weight:700;font-size:11px;color:var(--forest-bark)}
+#studentsTab .form-group input, #studentsTab .form-group textarea{width:100%;padding:6px 8px;border:1px solid var(--forest-line);border-radius:6px;box-sizing:border-box;font-family:inherit;font-size:13px;color:var(--forest-deep);background:#fff}
+#studentsTab .form-group input:focus, #studentsTab .form-group textarea:focus{outline:none;border-color:var(--forest-mid);background:var(--forest-gold-pale)}
+#studentsTab .full-width{grid-column:1/-1}
+#studentsTab .class-record-card{background:var(--forest-card);border:1px solid var(--forest-line);border-radius:10px;padding:14px 16px;box-shadow:0 3px 10px rgba(91,74,55,0.10)}
+#studentsTab .table-wrap{overflow:auto;max-height:560px;margin-top:10px;border:1px solid var(--forest-line);border-radius:6px}
+#studentsTab table.students-table{width:100%;border-collapse:collapse;min-width:1020px;font-size:12px}
+#studentsTab table.students-table th{background:var(--forest-mid);color:#fff;font-size:11px;font-weight:700;padding:6px 4px;border:1px solid var(--forest-bark);position:sticky;top:0;z-index:2;text-align:center}
+#studentsTab table.students-table td{border:1px solid var(--forest-line);padding:0;text-align:center;vertical-align:middle;background:var(--forest-card)}
+#studentsTab table.students-table td input, #studentsTab table.students-table td textarea{width:100%;box-sizing:border-box;border:none;padding:6px 4px;text-align:center;font-family:inherit;font-size:12px;resize:vertical;background:transparent;color:var(--forest-deep)}
+#studentsTab table.students-table td textarea{text-align:left}
+#studentsTab table.students-table td input:focus, #studentsTab table.students-table td textarea:focus{outline:none;background:var(--forest-gold-pale)}
+#studentsTab td.status-col textarea{text-align:left}
+#studentsTab .countdown-input::placeholder{color:var(--forest-bark);opacity:1;font-weight:400}
+#studentsTab .alert-payment{color:#fff;font-weight:700;background:var(--forest-berry);padding:2px 4px;border-radius:4px;display:block;font-size:10px;margin-top:3px}
+#studentsTab .unpaid-placeholder::placeholder{color:var(--forest-berry)!important;font-weight:700!important;opacity:1}
+#studentsTab .btn-del-row{background:var(--forest-berry);color:#fff;border:none;border-radius:10px;padding:4px 8px;font-size:11px;cursor:pointer}
+#studentsTab .btn-del-row:hover{background:#8a3f34}
+#studentsTab .empty-hint{padding:40px 10px;text-align:center;color:var(--forest-bark);font-size:13px}
+#studentsTab .note{font-size:11px;color:var(--forest-bark);margin-top:6px;line-height:1.6}
+
 /* 手機版 */
 @media(max-width:768px){
 #scheduleTab .dual{grid-template-columns:1fr;gap:15px}
@@ -788,6 +832,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
     <button class="tab-btn" data-tab="schedule" onclick="switchTab('schedule')">📅 華語課表</button>
     <button class="tab-btn active" data-tab="calendar" onclick="switchTab('calendar')">🗓 每日上課收入</button>
     <button class="tab-btn" data-tab="actual" onclick="switchTab('actual')">📋 實際收入紀錄</button>
+    <button class="tab-btn" data-tab="students" onclick="switchTab('students')">🧑‍🎓 學生上課狀況</button>
 </div>
 
 <div class="color-popover" id="colorPopover" onclick="event.stopPropagation()">
@@ -808,6 +853,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
   <h1><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2C8 6 5 9.5 5 13.5C5 17.09 7.91 20 11.5 20C11.5 20 11.5 17 11.5 15C9 15 7 13 7 10.5C7 8.5 8.5 6.5 12 2Z" fill="#c39a45"/><path d="M12 2C16 6 19 9.5 19 13.5C19 17.09 16.09 20 12.5 20C12.5 20 12.5 17 12.5 15C15 15 17 13 17 10.5C17 8.5 15.5 6.5 12 2Z" fill="#8fae86"/><rect x="11.3" y="18" width="1.4" height="4" fill="#5b4a37"/></svg>華語課表</h1>
   <span class="save-status" id="save-status">⏳ 正在連線雲端...</span>
   <button class="export-btn" onclick="exportScheduleExcel()">📥 匯出 Excel</button>
+  <button onclick="openSchedAiModal()">✨ Gemini AI 分析</button>
   <button class="danger" onclick="clearAll()">清空</button>
 </div>
 <div class="tz-bar">
@@ -906,26 +952,31 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
       <p class="note" id="min-summary-note"></p>
       <div class="cards" id="min-summary-cards"></div>
     </div>
-    <div class="sec" style="margin-top:22px">✨ Gemini AI 分析</div>
-    <div id="sched-ai-panel">
-      <button class="btn btn-add" onclick="runSchedAiAnalysis()">開始分析</button>
-      <div style="font-size:11px; color:var(--forest-bark); margin-top:8px;">
-        分析內容包含：目前課表的學生堂數、每週／每月預估收入、不穩定學生占比等狀況，並提供建議。分析完後可在下方繼續追問。<br>
-        第一次使用請先在程式碼中的 <code>GEMINI_API_KEY</code> 填入你自己的 Gemini API 金鑰（可到 Google AI Studio 免費申請）。
-      </div>
-      <div id="sched-ai-result" style="margin-top:14px; white-space:pre-wrap; line-height:1.75; font-size:13px; color:var(--forest-deep);"></div>
-      <div id="sched-ai-chat" style="display:none; margin-top:10px;">
-        <div id="sched-ai-history" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px;"></div>
-        <div style="display:flex; gap:8px;">
-          <input type="text" id="sched-ai-input" placeholder="針對課表與收費繼續追問" style="flex:1; border:1px solid var(--forest-line); border-radius:16px; padding:8px 14px; font-size:12px; font-family:inherit;" onkeydown="if(event.key==='Enter'){event.preventDefault();sendSchedAiFollowup();}">
-          <button class="btn btn-add" style="margin-bottom:0;" onclick="sendSchedAiFollowup()">送出</button>
-        </div>
-      </div>
-    </div>
   </div>
 </div>
 <div id="modal-mount"></div>
 
+    </div>
+</div>
+
+<div class="modal-overlay" id="schedAiModal" onclick="if(event.target===this) closeSchedAiModal();">
+    <div class="modal-box">
+        <h3>✨ Gemini AI 課表分析<button class="modal-close" onclick="closeSchedAiModal()">關閉</button></h3>
+        <div id="sched-ai-panel">
+            <button class="btn btn-add" onclick="runSchedAiAnalysis()">開始分析</button>
+            <div style="font-size:11px; color:var(--forest-bark); margin-top:8px;">
+                分析內容包含：目前課表的學生堂數、每週／每月預估收入、不穩定學生占比等狀況，並提供建議。分析完後可在下方繼續追問。<br>
+                第一次使用請先在程式碼中的 <code>GEMINI_API_KEY</code> 填入你自己的 Gemini API 金鑰（可到 Google AI Studio 免費申請）。
+            </div>
+            <div id="sched-ai-result" style="margin-top:14px; white-space:pre-wrap; line-height:1.75; font-size:13px; color:var(--forest-deep);"></div>
+            <div id="sched-ai-chat" style="display:none; margin-top:10px;">
+                <div id="sched-ai-history" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px; max-height:260px; overflow-y:auto;"></div>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" id="sched-ai-input" placeholder="針對課表與收費繼續追問" style="flex:1; border:1px solid var(--forest-line); border-radius:16px; padding:8px 14px; font-size:12px; font-family:inherit;" onkeydown="if(event.key==='Enter'){event.preventDefault();sendSchedAiFollowup();}">
+                    <button class="btn btn-add" style="margin-bottom:0;" onclick="sendSchedAiFollowup()">送出</button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -1046,6 +1097,103 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
     </div>
 </div>
 
+<!-- ===================== 分頁：學生上課狀況管理系統 ===================== -->
+<div class="view" id="view-students" style="display:none;">
+    <div id="studentsLoginGate" class="card" style="max-width:480px;margin:32px auto;text-align:center;padding:28px 24px;">
+        <p style="margin-bottom:14px;color:var(--forest-bark);line-height:1.6;">請先登入生活帳本帳號，才能使用並同步「學生上課狀況管理系統」（與「實際收入紀錄」的雲端同步共用同一組帳號）。</p>
+        <button class="btn-sync primary" onclick="openSyncLoginModal()">登入生活帳本帳號</button>
+    </div>
+    <div id="studentsTab" style="display:none;">
+        <div class="top-bar">
+            <h1><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2C8 6 5 9.5 5 13.5C5 17.09 7.91 20 11.5 20C11.5 20 11.5 17 11.5 15C9 15 7 13 7 10.5C7 8.5 8.5 6.5 12 2Z" fill="#c39a45"/><path d="M12 2C16 6 19 9.5 19 13.5C19 17.09 16.09 20 12.5 20C12.5 20 12.5 17 12.5 15C15 15 17 13 17 10.5C17 8.5 15.5 6.5 12 2Z" fill="#8fae86"/><rect x="11.3" y="18" width="1.4" height="4" fill="#5b4a37"/></svg>學生上課狀況管理系統</h1>
+            <span class="save-status" id="std-save-status">⏳ 正在連線雲端...</span>
+            <button class="primary" onclick="openStdAiModal()">✨ Gemini AI 分析</button>
+            <button class="export-btn" onclick="stdExportExcel()">📥 匯出 Excel</button>
+            <button class="export-btn" onclick="stdExportJSON()">📥 匯出資料(JSON)</button>
+            <button onclick="document.getElementById('stdImportInput').click()">📤 匯入資料</button>
+            <input type="file" id="stdImportInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="stdImportFile(event)">
+        </div>
+        <p class="note">匯入支援 .xlsx / .xls / .csv：可辨識像 Excel 課程紀錄表一樣「直式」排列的資料（左側欄位為 年齡／國籍／職業／興趣／念過中文嗎／念了多久／為什麼想學／目標／基本狀況等基本資料標籤，右側每一欄代表一堂課，列標籤為 時間／價格／累積時數／課程進度／下次進度／作業／上課狀況）。如果活頁簿有多個工作表，會把每個工作表當成一位學生匯入，並優先以工作表名稱作為學生姓名。</p>
+
+        <div class="view-toggle">
+            <button id="stdBtnViewActive" class="primary" onclick="stdToggleView('active')">📖 在學學生</button>
+            <button id="stdBtnViewArchived" onclick="stdToggleView('archived')">🗄️ 無緣的學生</button>
+        </div>
+
+        <div class="student-select">
+            <select id="stdStudentDropdown" onchange="stdLoadStudentInfo()">
+                <option value="">-- 選擇學生 --</option>
+            </select>
+            <button id="stdBtnAddStudent" onclick="stdAddNewStudent()">+ 新增學生</button>
+            <button id="stdBtnArchiveStudent" class="danger" onclick="stdArchiveCurrentStudent()">刪除學生 (移至無緣)</button>
+            <button id="stdBtnRestoreStudent" onclick="stdRestoreCurrentStudent()" style="display:none;">恢復此學生</button>
+            <button id="stdBtnPermDeleteStudent" class="danger" onclick="stdPermDeleteCurrentStudent()" style="display:none;">永久刪除</button>
+        </div>
+
+        <div class="basic-card" id="stdBasicInfoCard" style="display:none;">
+            <div id="stdBasicInfoForm">
+                <div class="form-group"><label>姓名</label><input type="text" id="std_info_name" onchange="stdSaveBasicInfo()"></div>
+                <div class="form-group"><label>年齡</label><input type="text" id="std_info_age" onchange="stdSaveBasicInfo()"></div>
+                <div class="form-group"><label>國籍</label><input type="text" id="std_info_nationality" onchange="stdSaveBasicInfo()"></div>
+                <div class="form-group"><label>職業</label><input type="text" id="std_info_occupation" onchange="stdSaveBasicInfo()"></div>
+                <div class="form-group"><label>興趣</label><input type="text" id="std_info_hobby" onchange="stdSaveBasicInfo()"></div>
+                <div class="form-group"><label>念過中文嗎</label><input type="text" id="std_info_studied" onchange="stdSaveBasicInfo()"></div>
+                <div class="form-group"><label>念了多久</label><input type="text" id="std_info_duration" onchange="stdSaveBasicInfo()"></div>
+                <div class="form-group"><label>為什麼想學</label><input type="text" id="std_info_reason" onchange="stdSaveBasicInfo()"></div>
+                <div class="form-group"><label>目標</label><input type="text" id="std_info_goal" onchange="stdSaveBasicInfo()"></div>
+                <div class="form-group full-width"><label>基本狀況</label><textarea id="std_info_status" rows="2" onchange="stdSaveBasicInfo()"></textarea></div>
+            </div>
+        </div>
+
+        <div class="class-record-card" id="stdClassRecordCard" style="display:none;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                <div class="sec" style="margin:0;border:none;padding:0;">📅 課程紀錄</div>
+                <button onclick="stdAddClassRecord()">+ 新增一堂課</button>
+            </div>
+            <div class="table-wrap">
+                <table class="students-table" id="stdClassesTable">
+                    <thead>
+                        <tr>
+                            <th style="width:120px;">時間</th>
+                            <th style="width:80px;">價格</th>
+                            <th style="width:80px;">累積時數</th>
+                            <th style="width:80px;">預付倒數</th>
+                            <th style="width:150px;">課程進度</th>
+                            <th style="width:150px;">下次進度</th>
+                            <th style="width:150px;">作業</th>
+                            <th>上課狀況</th>
+                            <th style="width:60px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stdClassesTbody"></tbody>
+                </table>
+            </div>
+        </div>
+        <div id="stdEmptyHint" class="empty-hint">請先在上方選擇或新增一位學生</div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="stdAiModal" onclick="if(event.target===this) closeStdAiModal();">
+    <div class="modal-box">
+        <h3>✨ Gemini AI 學生狀況分析<button class="modal-close" onclick="closeStdAiModal()">關閉</button></h3>
+        <div id="std-ai-body">
+            <button class="btn btn-add" onclick="runStdAiAnalysis()">開始分析</button>
+            <div style="font-size:11px; color:var(--forest-bark); margin-top:8px;">
+                分析內容包含：在學學生人數、即將扣完預付堂數／尚未付款的提醒名單、以及各學生最新的上課狀況與進度，並提供建議。分析完後可在下方繼續追問。<br>
+                第一次使用請先在程式碼中的 <code>GEMINI_API_KEY</code> 填入你自己的 Gemini API 金鑰（可到 Google AI Studio 免費申請）。
+            </div>
+            <div id="std-ai-result" style="margin-top:14px; white-space:pre-wrap; line-height:1.75; font-size:13px; color:var(--forest-deep);"></div>
+            <div id="std-ai-chat" style="display:none; margin-top:10px;">
+                <div id="std-ai-history" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px; max-height:260px; overflow-y:auto;"></div>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" id="std-ai-input" placeholder="針對學生狀況繼續追問" style="flex:1; border:1px solid var(--forest-line); border-radius:16px; padding:8px 14px; font-size:12px; font-family:inherit;" onkeydown="if(event.key==='Enter'){event.preventDefault();sendStdAiFollowup();}">
+                    <button class="btn btn-add" style="margin-bottom:0;" onclick="sendStdAiFollowup()">送出</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="view card" id="view-stats" style="display:none;">
     <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
         <h2 style="margin:0;">📊 每月統計</h2>
@@ -1127,7 +1275,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
     let currentTabName = 'calendar';
 
     function switchTab(tab){
-        const views = { schedule: 'view-schedule', calendar: 'view-calendar', actual: 'view-actual' };
+        const views = { schedule: 'view-schedule', calendar: 'view-calendar', actual: 'view-actual', students: 'view-students' };
         Object.entries(views).forEach(([key, id]) => {
             const el = document.getElementById(id);
             if (el) el.style.display = (key === tab) ? 'block' : 'none';
@@ -1149,12 +1297,12 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
                 if (wrap) wrap.scrollTop = wrap.scrollHeight;
             });
         }
-        // 「schedule」分頁的內容由華語課表自己的雲端監聽持續更新，切換分頁不需要額外重繪
+        // 「schedule」與「students」分頁的內容各自由自己的雲端監聽持續更新，切換分頁不需要額外重繪
     }
 
     /* 進入「每月統計」獨立頁面（取代原本的彈出視窗） */
     function openStatsPage() {
-        const views = ['view-schedule', 'view-calendar', 'view-actual'];
+        const views = ['view-schedule', 'view-calendar', 'view-actual', 'view-students'];
         views.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
@@ -2880,9 +3028,12 @@ ${monthLines.join('\n') || '（尚無資料）'}
             // 登入（或重新整理頁面後自動登入）時，補做一次同步，確保資料是最新的
             scheduleTeachingIncomeSync();
         }
-        // 「華語課表」分頁的雲端讀寫也綁在同一組登入狀態上
+        // 「華語課表」與「學生上課狀況管理系統」分頁的雲端讀寫也綁在同一組登入狀態上
         if (typeof window.updateScheduleGateUI === 'function') {
             window.updateScheduleGateUI(user);
+        }
+        if (typeof window.updateStdGateUI === 'function') {
+            window.updateStdGateUI(user);
         }
     };
 </script>
@@ -3444,6 +3595,8 @@ function schedRenderSummary(){
 }
 
 // ── 華語課表分頁：Gemini AI 分析（學生堂數／收費／不穩定占比等狀況與建議） ──
+function openSchedAiModal(){document.getElementById('schedAiModal').classList.add('open');}
+function closeSchedAiModal(){document.getElementById('schedAiModal').classList.remove('open');}
 async function runSchedAiAnalysis(){
   const resultEl=document.getElementById('sched-ai-result');
   if(!resultEl)return;
@@ -3612,11 +3765,671 @@ function updateScheduleGateUI(user){
   }
 }
 window.updateScheduleGateUI = updateScheduleGateUI;
+</script>
 
+<script>
+/* ============================================================
+   「學生上課狀況管理系統」分頁
+   資料存放在 Firestore 的 studentRecords/{uid} 文件裡，
+   跟「華語課表」一樣，需先在上方「登入生活帳本帳號」才能讀寫雲端資料。
+   結構：{ data: { <studentId>: { isArchived, basic:{...}, classes:[...] } } }
+============================================================ */
+let stdDb = {};
+let stdCurrentId = null;
+let stdCurrentView = 'active';
+let stdUnsub = null;
+let stdCloudLoaded = false;
+let stdInitedOnce = false;
+let stdSaveTimer = null;
+
+function stdDocRef(){
+    if(!window.ledgerUid) return null;
+    return window.firebaseDoc(window.firebaseDb, "studentRecords", window.ledgerUid);
+}
+
+function stdSetSaveStatus(s){
+    const el = document.getElementById('std-save-status');
+    if(!el) return;
+    if(s==='saving'){ el.textContent='⏳ 雲端同步中...'; el.className='save-status saving'; }
+    else if(s==='saved'){ el.textContent='✓ 雲端已同步'; el.className='save-status saved'; }
+    else { el.textContent='⚠ 同步失敗（請確認已登入生活帳本帳號）'; el.className='save-status'; }
+}
+
+function stdSaveData(){
+    clearTimeout(stdSaveTimer);
+    stdSaveTimer = setTimeout(stdSaveDataNow, 600);
+}
+
+function stdSaveDataNow(){
+    const ref = stdDocRef();
+    if(!ref){ stdSetSaveStatus('error'); return; }
+    stdSetSaveStatus('saving');
+    // 跟 schedules/{uid} 一樣，故意整份覆寫（不加 merge），避免本機刪除的欄位／學生
+    // 因為 Firestore 的深層合併而在下次同步時被還原回來。
+    window.firebaseSetDoc(ref, { data: stdDb, updatedAt: Date.now() })
+        .then(() => stdSetSaveStatus('saved'))
+        .catch(e => { console.error(e); stdSetSaveStatus('error'); });
+}
+
+function listenStdCloudData(){
+    const ref = stdDocRef();
+    if(!ref) return;
+    if(stdUnsub){ stdUnsub(); stdUnsub = null; }
+    stdUnsub = window.firebaseOnSnapshot(ref, doc => {
+        if(doc.exists()){
+            const d = doc.data();
+            stdDb = d.data || {};
+        }
+        stdCloudLoaded = true;
+        stdSetSaveStatus('saved');
+        stdUpdateDropdown();
+        stdLoadStudentInfo();
+    }, err => { console.error(err); stdSetSaveStatus('error'); });
+}
+
+function stdToggleView(view){
+    stdCurrentView = view;
+    stdCurrentId = null;
+
+    document.getElementById('stdBtnViewActive').className = view === 'active' ? 'primary' : '';
+    document.getElementById('stdBtnViewArchived').className = view === 'archived' ? 'primary' : '';
+
+    document.getElementById('stdBtnAddStudent').style.display = view === 'active' ? 'inline-block' : 'none';
+    document.getElementById('stdBtnArchiveStudent').style.display = view === 'active' ? 'inline-block' : 'none';
+    document.getElementById('stdBtnRestoreStudent').style.display = view === 'archived' ? 'inline-block' : 'none';
+    document.getElementById('stdBtnPermDeleteStudent').style.display = view === 'archived' ? 'inline-block' : 'none';
+
+    stdUpdateDropdown();
+    stdLoadStudentInfo();
+}
+
+function stdUpdateDropdown(){
+    const select = document.getElementById('stdStudentDropdown');
+    if(!select) return;
+    select.innerHTML = '<option value="">-- 選擇學生 --</option>';
+    Object.keys(stdDb).forEach(id => {
+        const isArchived = stdDb[id].isArchived || false;
+        if((stdCurrentView === 'active' && !isArchived) || (stdCurrentView === 'archived' && isArchived)){
+            const option = document.createElement('option');
+            option.value = id;
+            option.textContent = (stdDb[id].basic && stdDb[id].basic.name) || '未命名學生';
+            if(id === stdCurrentId) option.selected = true;
+            select.appendChild(option);
+        }
+    });
+}
+
+function stdAddNewStudent(){
+    const name = prompt("請輸入新學生姓名：");
+    if(!name) return;
+    const newId = 'std_' + Date.now();
+    stdDb[newId] = {
+        isArchived: false,
+        basic: { name, age:'', nationality:'', occupation:'', hobby:'', studied:'', duration:'', reason:'', goal:'', status:'' },
+        classes: []
+    };
+    stdCurrentId = newId;
+    stdSaveData();
+    stdUpdateDropdown();
+    document.getElementById('stdStudentDropdown').value = newId;
+    stdLoadStudentInfo();
+}
+
+function stdLoadStudentInfo(){
+    const select = document.getElementById('stdStudentDropdown');
+    if(!select) return;
+    stdCurrentId = select.value;
+
+    const basicCard = document.getElementById('stdBasicInfoCard');
+    const classCard = document.getElementById('stdClassRecordCard');
+    const emptyHint = document.getElementById('stdEmptyHint');
+
+    if(!stdCurrentId || !stdDb[stdCurrentId]){
+        basicCard.style.display = 'none';
+        classCard.style.display = 'none';
+        emptyHint.style.display = 'block';
+        return;
+    }
+
+    basicCard.style.display = 'block';
+    classCard.style.display = 'block';
+    emptyHint.style.display = 'none';
+
+    const s = stdDb[stdCurrentId].basic || {};
+    document.getElementById('std_info_name').value = s.name || '';
+    document.getElementById('std_info_age').value = s.age || '';
+    document.getElementById('std_info_nationality').value = s.nationality || '';
+    document.getElementById('std_info_occupation').value = s.occupation || '';
+    document.getElementById('std_info_hobby').value = s.hobby || '';
+    document.getElementById('std_info_studied').value = s.studied || '';
+    document.getElementById('std_info_duration').value = s.duration || '';
+    document.getElementById('std_info_reason').value = s.reason || '';
+    document.getElementById('std_info_goal').value = s.goal || '';
+    document.getElementById('std_info_status').value = s.status || '';
+
+    stdRenderClasses();
+}
+
+function stdSaveBasicInfo(){
+    if(!stdCurrentId) return;
+    stdDb[stdCurrentId].basic = {
+        name: document.getElementById('std_info_name').value,
+        age: document.getElementById('std_info_age').value,
+        nationality: document.getElementById('std_info_nationality').value,
+        occupation: document.getElementById('std_info_occupation').value,
+        hobby: document.getElementById('std_info_hobby').value,
+        studied: document.getElementById('std_info_studied').value,
+        duration: document.getElementById('std_info_duration').value,
+        reason: document.getElementById('std_info_reason').value,
+        goal: document.getElementById('std_info_goal').value,
+        status: document.getElementById('std_info_status').value
+    };
+    stdSaveData();
+    const option = document.querySelector(`#stdStudentDropdown option[value="${stdCurrentId}"]`);
+    if(option) option.textContent = stdDb[stdCurrentId].basic.name || '未命名學生';
+}
+
+function stdArchiveCurrentStudent(){
+    if(!stdCurrentId) return;
+    if(confirm("確定要將這位學生移至「無緣的學生」名單嗎？\n（資料不會消失，您隨時可以恢復）")){
+        stdDb[stdCurrentId].isArchived = true;
+        stdCurrentId = null;
+        stdSaveData();
+        stdUpdateDropdown();
+        stdLoadStudentInfo();
+    }
+}
+
+function stdRestoreCurrentStudent(){
+    if(!stdCurrentId) return;
+    if(confirm("確定要恢復這位學生嗎？他將回到「在學學生」名單。")){
+        stdDb[stdCurrentId].isArchived = false;
+        const targetId = stdCurrentId;
+        stdSaveData();
+        stdToggleView('active');
+        document.getElementById('stdStudentDropdown').value = targetId;
+        stdLoadStudentInfo();
+    }
+}
+
+function stdPermDeleteCurrentStudent(){
+    if(!stdCurrentId) return;
+    if(confirm("⚠️ 警告：此動作將「永久刪除」該學生的所有基本資料與上課紀錄！\n這項操作無法復原，確定要繼續嗎？")){
+        delete stdDb[stdCurrentId];
+        stdCurrentId = null;
+        stdSaveData();
+        stdUpdateDropdown();
+        stdLoadStudentInfo();
+    }
+}
+
+function stdAddClassRecord(){
+    if(!stdCurrentId) return;
+    let newHours = "1";
+    const classes = stdDb[stdCurrentId].classes || [];
+    if(classes.length > 0){
+        const lastHours = parseInt(classes[classes.length-1].hours);
+        if(!isNaN(lastHours)) newHours = (lastHours + 1).toString();
+    }
+    classes.push({ time:'', price:'', hours:newHours, prepaidInput:'', progress:'', next:'', homework:'', status:'' });
+    stdDb[stdCurrentId].classes = classes;
+    stdSaveData();
+    stdRenderClasses();
+    const wrap = document.querySelector('#stdClassRecordCard .table-wrap');
+    if(wrap) setTimeout(() => { wrap.scrollTop = wrap.scrollHeight; }, 50);
+}
+
+function stdDeleteClass(index){
+    if(confirm("確定要刪除這堂課的紀錄嗎？")){
+        stdDb[stdCurrentId].classes.splice(index, 1);
+        stdSaveData();
+        stdRenderClasses();
+    }
+}
+
+function stdSaveClassRecord(index, field, value){
+    if(!stdDb[stdCurrentId].classes) stdDb[stdCurrentId].classes = [];
+    stdDb[stdCurrentId].classes[index][field] = value;
+    stdSaveData();
+}
+
+function stdIsFutureTime(timeStr){
+    if(!timeStr) return false;
+    const match = timeStr.trim().match(/^(?:(\d{2,4})[\/\-])?(\d{1,2})[\/\-](\d{1,2})(?:\s+(\d{1,2})[:]?(\d{2}))?/);
+    if(!match) return false;
+
+    let y = match[1] ? parseInt(match[1], 10) : null;
+    const m = parseInt(match[2], 10) - 1;
+    const d = parseInt(match[3], 10);
+    const h = match[4] ? parseInt(match[4], 10) : 23;
+    const min = match[5] ? parseInt(match[5], 10) : 59;
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+
+    if(y !== null){ if(y < 100) y += 2000; } else { y = currentYear; }
+
+    let targetDate = new Date(y, m, d, h, min);
+
+    if(match[1] === undefined){
+        if(targetDate.getTime() < now.getTime() - 15552000000){
+            targetDate.setFullYear(currentYear + 1);
+        } else if(targetDate.getTime() > now.getTime() + 15552000000){
+            targetDate.setFullYear(currentYear - 1);
+        }
+    }
+    return targetDate > now;
+}
+
+function stdRenderClasses(){
+    const tbody = document.getElementById('stdClassesTbody');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+    const classes = (stdDb[stdCurrentId] && stdDb[stdCurrentId].classes) || [];
+
+    let currentCountdown = null;
+
+    classes.forEach((c, index) => {
+        if(c.prepaidInput && c.prepaidInput.trim() !== ''){
+            const parsedVal = parseInt(c.prepaidInput, 10);
+            if(!isNaN(parsedVal)) currentCountdown = parsedVal;
+        } else if(currentCountdown !== null){
+            currentCountdown--;
+        }
+
+        let displayVal = c.prepaidInput || '';
+        let placeholderVal = '';
+
+        if(displayVal !== '' && parseInt(displayVal, 10) <= 0){ displayVal = '尚未付款'; }
+
+        if(displayVal === '' && currentCountdown !== null){
+            placeholderVal = currentCountdown <= 0 ? '尚未付款' : currentCountdown;
+        }
+
+        let inputStyle = c.prepaidInput ? 'background-color:var(--forest-gold-pale);font-weight:700;color:var(--forest-mid);' : '';
+        let countdownClass = 'countdown-input';
+        if(placeholderVal === '尚未付款' || displayVal === '尚未付款'){
+            countdownClass += ' unpaid-placeholder';
+            if(displayVal === '尚未付款') inputStyle += 'color:var(--forest-berry);font-weight:700;';
+        }
+
+        let warningHtml = '';
+        if(currentCountdown === 2){ warningHtml = `<span class="alert-payment">提醒繳費</span>`; }
+
+        let timeStyle = stdIsFutureTime(c.time) ? 'background-color:var(--forest-pale);color:var(--forest-bark);' : '';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><input type="text" value="${escapeHtml(c.time || '')}" onchange="stdSaveClassRecord(${index}, 'time', this.value); stdRenderClasses();" placeholder="例: 3/4 1100" style="${timeStyle}"></td>
+            <td><input type="text" value="${escapeHtml(c.price || '')}" onchange="stdSaveClassRecord(${index}, 'price', this.value)"></td>
+            <td><input type="text" value="${escapeHtml(c.hours || '')}" onchange="stdSaveClassRecord(${index}, 'hours', this.value)"></td>
+            <td style="padding:4px;">
+                <input type="text"
+                       class="${countdownClass}"
+                       value="${escapeHtml(displayVal)}"
+                       placeholder="${placeholderVal}"
+                       onchange="stdSaveClassRecord(${index}, 'prepaidInput', this.value); stdRenderClasses();"
+                       style="${inputStyle}">
+                ${warningHtml}
+            </td>
+            <td><textarea rows="2" onchange="stdSaveClassRecord(${index}, 'progress', this.value)">${escapeHtml(c.progress || '')}</textarea></td>
+            <td><textarea rows="2" onchange="stdSaveClassRecord(${index}, 'next', this.value)">${escapeHtml(c.next || '')}</textarea></td>
+            <td><textarea rows="2" onchange="stdSaveClassRecord(${index}, 'homework', this.value)">${escapeHtml(c.homework || '')}</textarea></td>
+            <td class="status-col"><textarea rows="2" onchange="stdSaveClassRecord(${index}, 'status', this.value)">${escapeHtml(c.status || '')}</textarea></td>
+            <td><button class="btn-del-row" onclick="stdDeleteClass(${index})">刪除</button></td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+/* ============================================================
+   匯出：Excel（總覽 + 每位在學學生一個工作表）與 JSON 備份
+============================================================ */
+function stdExportExcel(){
+    const sheets = [];
+    const overview = [['姓名','狀態','國籍','年齡','累積堂數','最新累積時數','預付倒數提醒','最新上課狀況']];
+    Object.keys(stdDb).forEach(id => {
+        const s = stdDb[id];
+        const basic = s.basic || {};
+        const classes = s.classes || [];
+        const last = classes[classes.length - 1] || {};
+        let countdown = '';
+        let cd = null;
+        classes.forEach(c => {
+            if(c.prepaidInput && c.prepaidInput.trim() !== ''){
+                const v = parseInt(c.prepaidInput, 10);
+                if(!isNaN(v)) cd = v;
+            } else if(cd !== null){ cd--; }
+        });
+        if(cd !== null) countdown = cd <= 0 ? '尚未付款' : cd;
+        overview.push([
+            basic.name || '未命名學生',
+            s.isArchived ? '無緣的學生' : '在學學生',
+            basic.nationality || '',
+            basic.age || '',
+            classes.length,
+            last.hours || '',
+            countdown,
+            last.status || ''
+        ]);
+
+        const aoa = [
+            ['姓名', basic.name || ''],
+            ['年齡', basic.age || ''],
+            ['國籍', basic.nationality || ''],
+            ['職業', basic.occupation || ''],
+            ['興趣', basic.hobby || ''],
+            ['念過中文嗎', basic.studied || ''],
+            ['念了多久', basic.duration || ''],
+            ['為什麼想學', basic.reason || ''],
+            ['目標', basic.goal || ''],
+            ['基本狀況', basic.status || ''],
+            [],
+            ['時間','價格','累積時數','預付倒數','課程進度','下次進度','作業','上課狀況']
+        ];
+        classes.forEach(c => {
+            aoa.push([c.time||'', c.price||'', c.hours||'', c.prepaidInput||'', c.progress||'', c.next||'', c.homework||'', c.status||'']);
+        });
+        sheets.push({ name: basic.name || id, aoa });
+    });
+    sheets.unshift({ name: '總覽', aoa: overview });
+    downloadWorkbook(sheets, `學生上課狀況_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+function stdExportJSON(){
+    const dataStr = JSON.stringify(stdDb, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '學生上課狀況_備份.json';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+/* ============================================================
+   匯入 Excel / CSV：辨識「直式」課程紀錄表（欄位標籤在左側，
+   每一欄代表一堂課），例如舊版 Excel 手動記錄的課表。
+   有多個工作表時，每個工作表視為一位學生，優先以工作表名稱作為姓名。
+============================================================ */
+const STD_BASIC_LABELS = {
+    name: ['姓名','name'],
+    age: ['年齡','age'],
+    nationality: ['國籍','nationality'],
+    occupation: ['職業','occupation'],
+    hobby: ['興趣','hobby'],
+    studied: ['念過中文嗎','是否念過中文','studied'],
+    duration: ['念了多久','duration'],
+    reason: ['為什麼想學','為什麼想學中文','reason'],
+    goal: ['目標','goal'],
+    status: ['基本狀況','status']
+};
+const STD_CLASS_LABELS = {
+    time: ['時間','上課時間','time'],
+    price: ['價格','收費','price'],
+    hours: ['累積時數','時數','hours'],
+    progress: ['課程進度','progress'],
+    next: ['下次進度','next'],
+    homework: ['作業','homework'],
+    status: ['上課狀況','status']
+};
+
+function stdNormLabel(s){
+    return String(s == null ? '' : s).replace(/[\s()（）]/g, '').toLowerCase();
+}
+
+function stdMatchLabel(cellText, labelMap){
+    const norm = stdNormLabel(cellText);
+    if(!norm) return null;
+    for(const field in labelMap){
+        if(labelMap[field].some(l => stdNormLabel(l) === norm)) return field;
+    }
+    return null;
+}
+
+/* 把一個工作表（AOA，二維陣列）解析成 { basic, classes }；找不到課程紀錄區塊時回傳 null */
+function stdParseSheetAOA(aoa){
+    const basic = { name:'', age:'', nationality:'', occupation:'', hobby:'', studied:'', duration:'', reason:'', goal:'', status:'' };
+    const classFieldRows = {}; // field -> { rowIndex, labelCol }
+
+    aoa.forEach((row, rIdx) => {
+        if(!row) return;
+        for(let c = 0; c < Math.min(row.length, 3); c++){
+            const text = row[c];
+            if(text === undefined || text === null || String(text).trim() === '') continue;
+            const basicField = stdMatchLabel(text, STD_BASIC_LABELS);
+            if(basicField){
+                // 取同一列中，標籤欄位之後第一個非空的儲存格作為值
+                for(let vc = c + 1; vc < row.length; vc++){
+                    const v = row[vc];
+                    if(v !== undefined && v !== null && String(v).trim() !== ''){
+                        basic[basicField] = String(v).trim();
+                        break;
+                    }
+                }
+                break;
+            }
+            const classField = stdMatchLabel(text, STD_CLASS_LABELS);
+            if(classField && !classFieldRows[classField]){
+                classFieldRows[classField] = { rowIndex: rIdx, labelCol: c };
+                break;
+            }
+        }
+    });
+
+    const classFieldKeys = Object.keys(classFieldRows);
+    if(classFieldKeys.length === 0) return null; // 這個工作表沒有找到課程紀錄表格，視為無法辨識
+
+    // 資料欄位從「標籤欄位」右邊第一欄開始；取所有課程紀錄列裡最小的標籤欄位 + 1
+    const dataStartCol = Math.min(...classFieldKeys.map(f => classFieldRows[f].labelCol)) + 1;
+    // 資料結束欄位：取所有課程紀錄列中最長的一列
+    let dataEndCol = dataStartCol - 1;
+    classFieldKeys.forEach(f => {
+        const row = aoa[classFieldRows[f].rowIndex] || [];
+        for(let c = row.length - 1; c >= dataStartCol; c--){
+            if(row[c] !== undefined && row[c] !== null && String(row[c]).trim() !== ''){
+                if(c > dataEndCol) dataEndCol = c;
+                break;
+            }
+        }
+    });
+    if(dataEndCol < dataStartCol) return null;
+
+    // 找「預付倒數」用的數字列：緊接在「時間」列上方、內容幾乎都是純數字的那一列
+    let countdownRow = null;
+    if(classFieldRows.time){
+        for(let r = classFieldRows.time.rowIndex - 1; r >= Math.max(0, classFieldRows.time.rowIndex - 3); r--){
+            const row = aoa[r] || [];
+            let numCount = 0, checked = 0;
+            for(let c = dataStartCol; c <= dataEndCol; c++){
+                const v = row[c];
+                if(v === undefined || v === null || String(v).trim() === '') continue;
+                checked++;
+                if(!isNaN(parseInt(v, 10))) numCount++;
+            }
+            if(checked > 0 && numCount === checked){ countdownRow = row; break; }
+            if(checked > 0) break; // 有內容但不是純數字，就不是倒數列，停止往上找
+        }
+    }
+
+    const classCount = dataEndCol - dataStartCol + 1;
+    const classes = [];
+    let prevCountdown = null;
+    for(let i = 0; i < classCount; i++){
+        const col = dataStartCol + i;
+        const rec = { time:'', price:'', hours:'', prepaidInput:'', progress:'', next:'', homework:'', status:'' };
+        Object.keys(classFieldRows).forEach(field => {
+            const row = aoa[classFieldRows[field].rowIndex] || [];
+            const v = row[col];
+            if(v !== undefined && v !== null) rec[field] = String(v).trim();
+        });
+        if(countdownRow){
+            const raw = countdownRow[col];
+            const v = (raw === undefined || raw === null || String(raw).trim() === '') ? null : parseInt(raw, 10);
+            if(v !== null && !isNaN(v)){
+                // 只有在「重新開始一個新的預付堂數區塊」時才寫入 prepaidInput，
+                // 其餘欄位留白，讓 App 自己往下遞減（跟畫面上顯示的倒數邏輯一致）。
+                if(prevCountdown === null || v > prevCountdown){ rec.prepaidInput = String(v); }
+                prevCountdown = v;
+            }
+        }
+        // 只有在這堂課至少有一個欄位有資料時才加入，避免匯入整排空白
+        if(Object.values(rec).some(v => v !== '')) classes.push(rec);
+    }
+
+    if(classes.length === 0 && !Object.values(basic).some(v => v !== '')) return null;
+    return { basic, classes };
+}
+
+function stdImportFile(event){
+    const file = event.target.files[0];
+    if(!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e){
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+            let importCount = 0;
+            const skipped = [];
+
+            workbook.SheetNames.forEach(sheetName => {
+                const sheet = workbook.Sheets[sheetName];
+                const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+                const parsed = stdParseSheetAOA(aoa);
+                if(!parsed){ skipped.push(sheetName); return; }
+
+                const name = parsed.basic.name || sheetName;
+                const newId = 'std_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+                parsed.basic.name = name;
+                stdDb[newId] = { isArchived: false, basic: parsed.basic, classes: parsed.classes };
+                importCount++;
+            });
+
+            if(importCount === 0){
+                alert('匯入失敗，找不到可辨識的課程紀錄表格。請確認欄位標籤（時間／價格／累積時數／課程進度／下次進度／作業／上課狀況等）在儲存格最左側幾欄。');
+                return;
+            }
+
+            stdSaveData();
+            stdUpdateDropdown();
+            stdLoadStudentInfo();
+
+            let msg = `已匯入 ${importCount} 位學生的課程紀錄。`;
+            if(skipped.length) msg += `\n有 ${skipped.length} 個工作表無法辨識而略過：${skipped.join('、')}`;
+            alert(msg);
+        } catch(err){
+            console.error(err);
+            alert('匯入失敗，請確認檔案格式是否為 .xlsx / .xls / .csv。');
+        } finally {
+            event.target.value = '';
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+/* ============================================================
+   「學生上課狀況管理系統」分頁：Gemini AI 分析
+============================================================ */
+function openStdAiModal(){ document.getElementById('stdAiModal').classList.add('open'); }
+function closeStdAiModal(){ document.getElementById('stdAiModal').classList.remove('open'); }
+
+async function runStdAiAnalysis(){
+    const resultEl = document.getElementById('std-ai-result');
+    if(!resultEl) return;
+
+    if(typeof GEMINI_API_KEY === 'undefined' || !GEMINI_API_KEY || GEMINI_API_KEY === "YOUR_GEMINI_API_KEY"){
+        resultEl.textContent = '尚未設定 Gemini API 金鑰。請在程式碼中找到 GEMINI_API_KEY，換成你自己在 Google AI Studio 申請的金鑰後再試一次。';
+        return;
+    }
+
+    resultEl.textContent = '分析中，請稍候...';
+    resetAiConversation('students');
+    const chatWrap = document.getElementById('std-ai-chat');
+    if(chatWrap) chatWrap.style.display = 'none';
+
+    try {
+        const activeIds = Object.keys(stdDb).filter(id => !stdDb[id].isArchived);
+        const paymentAlerts = [];
+        const studentLines = activeIds.map(id => {
+            const s = stdDb[id];
+            const basic = s.basic || {};
+            const classes = s.classes || [];
+            const last = classes[classes.length - 1] || {};
+            let cd = null;
+            classes.forEach(c => {
+                if(c.prepaidInput && c.prepaidInput.trim() !== ''){
+                    const v = parseInt(c.prepaidInput, 10);
+                    if(!isNaN(v)) cd = v;
+                } else if(cd !== null){ cd--; }
+            });
+            if(cd !== null && cd <= 2){
+                paymentAlerts.push(`${basic.name || '未命名學生'}：預付堂數剩 ${cd <= 0 ? '已用完/尚未付款' : cd + ' 堂'}`);
+            }
+            return `- ${basic.name || '未命名學生'}（${basic.nationality || '未填國籍'}）：累計 ${classes.length} 堂課，最新進度「${last.progress || '未填'}」，最新上課狀況「${last.status || '未填'}」`;
+        });
+
+        const promptText = `你是一位中文家教顧問，協助一位在台灣經營中文家教／線上中文教學品牌「每天一分鐘」的老師管理學生。以下是目前「在學學生」名單與最新狀況：
+
+【在學學生人數】${activeIds.length} 人
+
+【各學生最新狀況】
+${studentLines.join('\n') || '（目前沒有在學學生）'}
+
+【需要留意的繳費提醒（預付堂數剩 2 堂以內）】
+${paymentAlerts.join('\n') || '（目前沒有需要提醒的學生）'}
+
+請以繁體中文，針對以下三點做簡短分析並給出具體建議：
+1. 整體學生狀況（有沒有進度停滯、狀況需要特別留意的學生）
+2. 需要優先聯絡催繳學費的學生，以及建議的提醒方式
+3. 有哪些學生的上課狀況值得肯定、可以維持現有教法
+
+請用條列式呈現，語氣專業但親切，總長度控制在 400 字以內。`;
+
+        const text = await callGeminiConversation('students', promptText);
+        resultEl.textContent = text;
+        if(chatWrap) chatWrap.style.display = '';
+        renderAiChatHistory('students', 'std-ai-history');
+    } catch(err){
+        console.error(err);
+        resultEl.textContent = (err && err.message && err.message.includes('金鑰')) ? err.message : '分析失敗，請確認 API 金鑰是否正確、網路連線是否正常，再試一次。';
+    }
+}
+
+function sendStdAiFollowup(){
+    sendAiFollowup('students', 'std-ai-input', 'std-ai-history', 'std-ai-chat');
+}
+
+/* ── 登入狀態控制：學生上課狀況資料與生活帳本帳號綁在一起（studentRecords/{uid}）── */
+function updateStdGateUI(user){
+    const gate = document.getElementById('studentsLoginGate');
+    const content = document.getElementById('studentsTab');
+    if(!gate || !content) return;
+    if(user){
+        gate.style.display = 'none';
+        content.style.display = '';
+        if(!stdInitedOnce){
+            stdInitedOnce = true;
+            stdToggleView('active');
+        }
+        listenStdCloudData();
+    } else {
+        gate.style.display = '';
+        content.style.display = 'none';
+        stdCloudLoaded = false;
+        if(stdUnsub){ stdUnsub(); stdUnsub = null; }
+    }
+}
+window.updateStdGateUI = updateStdGateUI;
+</script>
+
+<script>
 // ── 啟動 ──
 document.body.style.visibility = 'visible';
-// 課表本身要等登入生活帳本帳號後才會開始讀寫雲端（見 updateScheduleGateUI）
+// 課表與學生上課狀況管理系統本身要等登入生活帳本帳號後才會開始讀寫雲端
+// （見 updateScheduleGateUI／updateStdGateUI）
 updateScheduleGateUI(null);
+updateStdGateUI(null);
 </script>
 </body>
 </html>
