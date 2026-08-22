@@ -1748,26 +1748,22 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         return '';
     }
 
-    // 主頁左欄：只顯示總計卡片 + 最近 2 個月，標題可點擊開啟完整彈窗
+    // 主頁左欄：顯示總計卡片 + 今年 1~12 月完整列表，標題可點擊開啟完整彈窗（含歷年資料）
     function renderMonthlySummary() {
         const { summary, grandTotal, grandClasses } = buildMonthlySummaryData();
         const grandAvg = grandClasses > 0 ? Math.round(grandTotal / grandClasses) : 0;
 
-        // 一律以「今天」為基準，往前抓最近 2 個月（不受日曆翻頁影響）
+        // 一律以「今天」為基準的年度，顯示今年 1~12 月（含還沒到來的月份，方便對照整年度）
         const today = new Date();
         const anchorRocYear = today.getFullYear() - ROC_YEAR_OFFSET;
-        const anchorMonth = today.getMonth() + 1;
         const recentMonths = [];
-        for (let i = 0; i < 2; i++) {
-            let m = anchorMonth - i;
-            let y = anchorRocYear;
-            while (m < 1) { m += 12; y -= 1; }
-            recentMonths.push({ y, m });
+        for (let m = 12; m >= 1; m--) {
+            recentMonths.push({ y: anchorRocYear, m });
         }
 
         let html = `<button class="stats-btn" onclick="openStatsPage()">
                         <span>📊 每月統計</span>
-                        <span class="hint">近 2 個月 · 點擊查看全部 ▸</span>
+                        <span class="hint">${anchorRocYear}年（今年）1~12月 · 點擊查看全部 ▸</span>
                     </button>`;
         html += `<div class="summary-grand">
                     <div><div class="label">累計收入</div><div class="value">${grandTotal}</div></div>
@@ -2064,7 +2060,7 @@ ${monthlyLines.join('\n') || '（尚無資料）'}
        如果這個檔案會公開放到網路上（例如 GitHub Pages），建議之後改成
        透過自己的後端小程式轉發請求，金鑰只放在後端，不要放在前端。
     ============================================================ */
-    const GEMINI_API_KEY = "AQ.Ab8RN6Jgcg-OnXmFJjAMddoZoTZ3s0utQVE_wCEeft8CZGSmEg";
+    const GEMINI_API_KEY = "%%GEMINI_API_KEY%%"; // 部署時由 GitHub Actions 自動換成真正的金鑰，git 裡永遠只會看到這個佔位符
     const GEMINI_MODEL = "gemini-2.5-flash";
 
     function openAiModal() {
