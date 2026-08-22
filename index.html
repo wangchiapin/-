@@ -10,6 +10,86 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
+<script>
+/* ============================================================
+   共用匯出工具：把畫面上的表格／卡片，原封不動轉成 Excel 工作表
+   （每個分頁各自呼叫，產出跟畫面上一樣的表格內容）
+============================================================ */
+
+/* 把一個 <table> DOM 元素轉成二維陣列（AOA），供 SheetJS 使用。
+   會讀 thead / tbody / tfoot 裡每一列、每一格的實際顯示內容：
+   - <input type="checkbox"> → ✓ 或空白
+   - <input> 其他類型 → 目前輸入的值
+   - 其餘 → 該儲存格的純文字
+   遇到 colspan／rowspan 只取第一格文字，其餘位置留空，維持欄位對齊 */
+function tableToAOA(table) {
+    if (!table) return [];
+    const aoa = [];
+    const rows = table.querySelectorAll('tr');
+    rows.forEach(tr => {
+        const row = [];
+        tr.querySelectorAll('th,td').forEach(cell => {
+            let text = '';
+            const input = cell.querySelector('input');
+            const select = cell.querySelector('select');
+            if (input) {
+                text = (input.type === 'checkbox') ? (input.checked ? '✓' : '') : (input.value || '');
+            } else if (select) {
+                text = select.value || '';
+            } else {
+                text = cell.textContent.replace(/\s+/g, ' ').trim();
+            }
+            row.push(text);
+            const span = parseInt(cell.getAttribute('colspan') || '1', 10);
+            for (let i = 1; i < span; i++) row.push('');
+        });
+        aoa.push(row);
+    });
+    return aoa;
+}
+
+/* 把一組 .card（label/value 卡片）轉成二維陣列：[[項目, 數值], ...] */
+function cardsToAOA(container) {
+    if (!container) return [];
+    const aoa = [['項目', '數值', '備註']];
+    container.querySelectorAll('.card').forEach(card => {
+        const label = card.querySelector('.card-label');
+        const value = card.querySelector('.card-value');
+        const sub = card.querySelector('.card-sub');
+        aoa.push([
+            label ? label.textContent.trim() : '',
+            value ? value.textContent.trim() : '',
+            sub ? sub.textContent.trim() : ''
+        ]);
+    });
+    return aoa;
+}
+
+/* 產生並下載 .xlsx 檔案。sheets：[{name, aoa}, ...] */
+function downloadWorkbook(sheets, filename) {
+    if (typeof XLSX === 'undefined') {
+        alert('Excel 匯出套件尚未載入完成，請稍後再試一次。');
+        return;
+    }
+    const wb = XLSX.utils.book_new();
+    let hasSheet = false;
+    sheets.forEach(({ name, aoa }) => {
+        if (!aoa || aoa.length === 0) return;
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        // 安全的工作表名稱：Excel 限制 31 字元且不能有特定符號
+        const safeName = (name || 'Sheet').replace(/[\\/*?:[\]]/g, '').slice(0, 31) || 'Sheet';
+        XLSX.utils.book_append_sheet(wb, ws, safeName);
+        hasSheet = true;
+    });
+    if (!hasSheet) {
+        alert('目前沒有可以匯出的資料。');
+        return;
+    }
+    XLSX.writeFile(wb, filename);
+}
+</script>
+
+
 <!-- ============================================================
      Firebase 設定：與「生活帳本 moneybook」共用同一個 Firebase 專案
      這裡同時初始化 Firestore 與 Auth，並負責把「實際收入與匯款紀錄」
@@ -494,8 +574,6 @@
 #scheduleTab button.danger:hover{background:#8a3f34}
 #scheduleTab button.export-btn{background:var(--forest-gold-pale);color:var(--forest-bark);border-color:var(--forest-gold)}
 #scheduleTab button.export-btn:hover{background:var(--forest-gold)}
-#scheduleTab button.share-btn{background:var(--forest-light);color:var(--forest-deep);border-color:var(--forest-mid)}
-#scheduleTab button.share-btn:hover{background:#79a06d}
 #scheduleTab .save-status{font-size:11px;color:var(--forest-light);margin-left:4px}
 #scheduleTab .save-status.saved{color:var(--forest-light)}
 #scheduleTab .save-status.saving{color:var(--forest-gold-pale)}
@@ -576,13 +654,6 @@
 .export-wrap td.ec{border:1px solid var(--forest-line);padding:2px;height:36px;vertical-align:middle}
 .export-libre{background:var(--forest-gold-pale);height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--forest-bark);border-radius:4px}
 .export-busy{background:var(--forest-bark);height:100%;border-radius:4px}
-/* share link popup */
-#scheduleTab .share-popup{position:fixed;inset:0;background:rgba(30,58,44,0.55);display:flex;align-items:center;justify-content:center;z-index:99}
-#scheduleTab .share-box{background:var(--forest-card);border:1px solid var(--forest-line);border-radius:12px;padding:1.5rem;width:340px;box-shadow:0 10px 30px rgba(0,0,0,0.3)}
-#scheduleTab .share-box h3{font-family:'Noto Serif TC',serif;font-size:14px;font-weight:700;margin-bottom:8px;color:var(--forest-deep)}
-#scheduleTab .share-box p{font-size:12px;color:var(--forest-bark);margin-bottom:12px;line-height:1.5}
-#scheduleTab .share-url{width:100%;font-size:11px;padding:8px;border:1px solid var(--forest-line);border-radius:8px;background:var(--forest-pale);color:var(--forest-deep);word-break:break-all;margin-bottom:10px;min-height:48px;resize:none;font-family:monospace}
-#scheduleTab .share-btns{display:flex;gap:8px}
 /* 手機版 */
 @media(max-width:768px){
 #scheduleTab .dual{grid-template-columns:1fr;gap:15px}
@@ -638,6 +709,7 @@
 <div class="top-bar">
   <h1><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2C8 6 5 9.5 5 13.5C5 17.09 7.91 20 11.5 20C11.5 20 11.5 17 11.5 15C9 15 7 13 7 10.5C7 8.5 8.5 6.5 12 2Z" fill="#c39a45"/><path d="M12 2C16 6 19 9.5 19 13.5C19 17.09 16.09 20 12.5 20C12.5 20 12.5 17 12.5 15C15 15 17 13 17 10.5C17 8.5 15.5 6.5 12 2Z" fill="#8fae86"/><rect x="11.3" y="18" width="1.4" height="4" fill="#5b4a37"/></svg>華語課表</h1>
   <span class="save-status" id="save-status">⏳ 正在連線雲端...</span>
+  <button class="export-btn" onclick="exportScheduleExcel()">📥 匯出 Excel</button>
   <button class="danger" onclick="clearAll()">清空</button>
 </div>
 <div class="tz-bar">
@@ -665,7 +737,6 @@
   <div class="sec-actions">
     <button class="export-btn" onclick="exportFreeImage('tw')">匯出台灣時間 🖼</button>
     <button class="export-btn" onclick="exportFreeImage('ot')">匯出對照時區 🖼</button>
-    <button class="share-btn" onclick="showShareLink()">分享空檔連結 🔗</button>
   </div>
 </div>
 <div class="dual">
@@ -687,17 +758,29 @@
       <th style="width:24px"></th><th>學生</th>
       <th class="num">每堂收費（NT$）</th><th class="num">每週堂數</th>
       <th class="num">每週收入</th><th class="num">每月預估</th>
+      <th style="width:70px">不穩定</th>
     </tr></thead>
     <tbody id="rate-body"></tbody>
     <tfoot id="rate-foot"></tfoot>
   </table>
 </div>
 <p class="note">每月預估 = 每週收入 × 4 週</p>
+<p class="note">勾選「不穩定」：該學生上課狀況不固定，計算「預估最低收入」時會排除這位學生的收費，避免收入預估失真。上方原本的每週／每月數據仍會照常納入所有學生，方便你直接比較兩種估算的差異。</p>
 
 <div class="sec" style="margin-top:22px">📆 每日收入</div>
 <div class="day-grid" id="day-grid"></div>
+<div id="min-day-section" style="display:none;">
+  <div class="sec" style="margin-top:22px">📆 預估最低每日收入</div>
+  <p class="note" id="min-day-note"></p>
+  <div class="day-grid" id="min-day-grid"></div>
+</div>
 <div class="sec" style="margin-top:22px">📊 收入總覽</div>
 <div class="cards" id="summary-cards"></div>
+<div id="min-summary-section" style="display:none;">
+  <div class="sec" style="margin-top:22px">📊 預估最低收入總覽</div>
+  <p class="note" id="min-summary-note"></p>
+  <div class="cards" id="min-summary-cards"></div>
+</div>
 <div id="modal-mount"></div>
 
     </div>
@@ -735,6 +818,7 @@
             <div class="calendar-toolbar">
                 <button class="btn-today" onclick="goToCurrentMonth()">🏠 回本月</button>
                 <button class="btn-cal-import" onclick="document.getElementById('calendarImportInput').click()">📥 匯入每日紀錄</button>
+                <button class="btn-cal-import" onclick="exportCalendarExcel()">📤 匯出 Excel</button>
                 <input type="file" id="calendarImportInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importCalendarIncome(event)">
             </div>
             <div id="calendar-area"></div>
@@ -759,7 +843,8 @@
 <div class="view card actual-container" id="view-actual" style="display:none;">
     <h2>實際收入與匯款紀錄</h2>
     <button class="btn btn-add" onclick="addRow()">+ 新增一筆紀錄</button>
-    <button class="btn" onclick="exportData()" style="float:right;">匯出資料</button>
+    <button class="btn" onclick="exportRecordsExcel()" style="float:right;">📤 匯出 Excel</button>
+    <button class="btn" onclick="exportData()" style="float:right; margin-right:8px;">匯出資料(JSON)</button>
     <button class="btn" onclick="document.getElementById('excelImportInput').click()" style="float:right; margin-right:8px; background:var(--forest-gold-pale);">📥 匯入 Excel</button>
     <input type="file" id="excelImportInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importExcel(event)">
     <div style="clear:both; font-size:11px; color:var(--forest-bark); margin:-4px 0 10px;">
@@ -796,13 +881,33 @@
         </table>
     </div>
 
+    <button class="btn btn-add" style="margin-top:10px;" onclick="addRow()">+ 新增一筆紀錄</button>
+
     <div class="summary-wrapper" id="summary-area"></div>
 </div>
 
-<div class="modal-overlay" id="statsModal" onclick="if(event.target===this) closeStatsModal();">
-    <div class="modal-box">
-        <h3>📊 每月統計（完整）<button class="modal-close" onclick="closeStatsModal()">關閉</button></h3>
-        <div id="stats-modal-body"></div>
+<div class="view card" id="view-stats" style="display:none;">
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+        <h2 style="margin:0;">📊 每月統計</h2>
+        <div style="display:flex; gap:8px;">
+            <button class="btn" onclick="exportStatsExcel()">📤 匯出 Excel</button>
+            <button class="btn" onclick="closeStatsPage()">← 回上頁</button>
+        </div>
+    </div>
+
+    <div id="stats-page-monthly-body"></div>
+
+    <h2 style="margin-top:28px;">📆 每年統計</h2>
+    <div id="stats-page-yearly-body"></div>
+
+    <h2 style="margin-top:28px;">✨ Gemini AI 分析</h2>
+    <div id="stats-page-ai-body">
+        <button class="btn btn-add" onclick="runStatsPageAiAnalysis()">開始分析</button>
+        <div style="font-size:11px; color:var(--forest-bark); margin-top:8px;">
+            分析內容包含：每月收入狀況、每年收入狀況，並提供建議。<br>
+            第一次使用請先在程式碼中的 <code>GEMINI_API_KEY</code> 填入你自己的 Gemini API 金鑰（可到 Google AI Studio 免費申請）。
+        </div>
+        <div id="stats-page-ai-result" style="margin-top:14px; white-space:pre-wrap; line-height:1.75; font-size:13px; color:var(--forest-deep);"></div>
     </div>
 </div>
 
@@ -838,15 +943,20 @@
     /* ============================================================
        頁面切換
     ============================================================ */
+    let currentTabName = 'calendar';
+
     function switchTab(tab){
         const views = { schedule: 'view-schedule', calendar: 'view-calendar', actual: 'view-actual' };
         Object.entries(views).forEach(([key, id]) => {
             const el = document.getElementById(id);
             if (el) el.style.display = (key === tab) ? 'block' : 'none';
         });
+        const statsEl = document.getElementById('view-stats');
+        if (statsEl) statsEl.style.display = 'none';
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.tab === tab);
         });
+        currentTabName = tab;
         if (tab === 'calendar') {
             renderCalendar();
             updateChart();
@@ -859,6 +969,37 @@
             });
         }
         // 「schedule」分頁的內容由華語課表自己的雲端監聽持續更新，切換分頁不需要額外重繪
+    }
+
+    /* 進入「每月統計」獨立頁面（取代原本的彈出視窗） */
+    function openStatsPage() {
+        const views = ['view-schedule', 'view-calendar', 'view-actual'];
+        views.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+        const tabNav = document.getElementById('tabNav');
+        if (tabNav) tabNav.style.display = 'none';
+
+        const statsEl = document.getElementById('view-stats');
+        if (statsEl) statsEl.style.display = 'block';
+
+        renderStatsPageMonthly();
+        renderStatsPageYearly();
+
+        const aiResult = document.getElementById('stats-page-ai-result');
+        if (aiResult) aiResult.textContent = '';
+
+        window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+
+    /* 回到進入統計頁前所在的分頁 */
+    function closeStatsPage() {
+        const statsEl = document.getElementById('view-stats');
+        if (statsEl) statsEl.style.display = 'none';
+        const tabNav = document.getElementById('tabNav');
+        if (tabNav) tabNav.style.display = '';
+        switchTab(currentTabName || 'calendar');
     }
 
     /* ============================================================
@@ -1295,7 +1436,7 @@
             recentMonths.push({ y, m });
         }
 
-        let html = `<button class="stats-btn" onclick="openStatsModal()">
+        let html = `<button class="stats-btn" onclick="openStatsPage()">
                         <span>📊 每月統計</span>
                         <span class="hint">近 2 個月 · 點擊查看全部 ▸</span>
                     </button>`;
@@ -1330,15 +1471,26 @@
         document.getElementById('monthly-summary-area').innerHTML = html;
     }
 
-    // 彈窗：完整每月統計（所有年份/月份）
-    function renderMonthlySummaryFull() {
-        const { summary, startRocYear, endRocYear } = buildMonthlySummaryData();
-        const today = new Date();
-        const todayRocYear = today.getFullYear() - ROC_YEAR_OFFSET;
-        const todayMonth = today.getMonth() + 1;
+    /* 依實際資料算出統計頁要顯示的年度範圍：
+       下限＝資料最早出現的年度；上限＝「今年」（不管今年有沒有資料都顯示到今年12月，
+       但還沒到來的年度，例如明年，不會顯示） */
+    function getStatsYearRange(summary) {
+        const todayRocYear = new Date().getFullYear() - ROC_YEAR_OFFSET;
+        const dataYears = Object.keys(summary).map(Number).filter(n => !isNaN(n));
+        let minYear = dataYears.length ? Math.min(...dataYears) : todayRocYear;
+        let maxYear = todayRocYear;
+        if (minYear > maxYear) minYear = maxYear;
+        return { minYear, maxYear };
+    }
+
+    /* 統計頁：完整每月統計（所有年份/月份）。過去沒有收入的月份仍會顯示（金額顯示為 0），
+       只有還沒到來的年度（例如明年）才不會顯示。 */
+    function renderStatsPageMonthly() {
+        const { summary } = buildMonthlySummaryData();
+        const { minYear, maxYear } = getStatsYearRange(summary);
         let html = '';
 
-        for (let y = startRocYear; y >= endRocYear; y--) {
+        for (let y = maxYear; y >= minYear; y--) {
             let yearlyTotal = 0;
             let yearlyClasses = 0;
             for (let m = 1; m <= 12; m++) {
@@ -1349,7 +1501,7 @@
             }
             let yearlyAvgSalary = Math.round(yearlyTotal / 12);
 
-            html += `<table class="summary-report-table">
+            html += `<table class="summary-report-table" style="margin-bottom:16px;">
                         <thead>
                             <tr>
                                 <th style="width:26%;">月份</th>
@@ -1365,9 +1517,7 @@
                             <td>月均${yearlyAvgSalary}</td>
                         </tr>`;
 
-            // 最新的月份在最上面：當年度從「今天所在月份」往回數，其他年度從12月往回數
-            const topMonth = (y === todayRocYear) ? todayMonth : 12;
-            for (let m = topMonth; m >= 1; m--) {
+            for (let m = 12; m >= 1; m--) {
                 let monthData = summary[y] && summary[y][m] ? summary[y][m] : { total: 0, classes: 0 };
                 let monthTotal = monthData.total;
                 let monthClasses = monthData.classes;
@@ -1375,24 +1525,161 @@
 
                 html += `<tr>
                             <td>${m}月</td>
-                            <td class="${monthCellClass(monthTotal)}">${monthTotal || ''}</td>
-                            <td>${monthClasses || ''}</td>
+                            <td class="${monthCellClass(monthTotal)}">${monthTotal || 0}</td>
+                            <td>${monthClasses || 0}</td>
                             <td>${monthAvg !== '-' ? monthAvg : ''}</td>
                           </tr>`;
             }
             html += '</tbody></table>';
         }
 
-        document.getElementById('stats-modal-body').innerHTML = html;
+        if (!html) {
+            html = '<p style="color:var(--forest-bark); font-size:13px;">目前還沒有任何收入紀錄。</p>';
+        }
+
+        document.getElementById('stats-page-monthly-body').innerHTML = html;
     }
 
-    function openStatsModal() {
-        renderMonthlySummaryFull();
-        document.getElementById('statsModal').classList.add('open');
+    /* 統計頁：僅顯示每年統計（不含月份明細）。範圍與每月統計相同，還沒到來的年度不顯示。 */
+    function renderStatsPageYearly() {
+        const { summary } = buildMonthlySummaryData();
+        const { minYear, maxYear } = getStatsYearRange(summary);
+        let rows = [];
+
+        for (let y = maxYear; y >= minYear; y--) {
+            let yearlyTotal = 0;
+            let yearlyClasses = 0;
+            for (let m = 1; m <= 12; m++) {
+                if (summary[y] && summary[y][m]) {
+                    yearlyTotal += summary[y][m].total;
+                    yearlyClasses += summary[y][m].classes;
+                }
+            }
+            rows.push({ y, yearlyTotal, yearlyClasses });
+        }
+
+        let html;
+        if (rows.length === 0) {
+            html = '<p style="color:var(--forest-bark); font-size:13px;">目前還沒有任何收入紀錄。</p>';
+        } else {
+            html = `<table class="summary-report-table">
+                        <thead>
+                            <tr>
+                                <th style="width:28%;">年度</th>
+                                <th style="width:32%;">總收入</th>
+                                <th style="width:20%;">總節數</th>
+                                <th style="width:20%;">月均收入</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+            rows.forEach(({ y, yearlyTotal, yearlyClasses }) => {
+                const monthlyAvg = Math.round(yearlyTotal / 12);
+                html += `<tr>
+                            <td>${y}年</td>
+                            <td class="${monthCellClass(yearlyTotal)}">${Math.round(yearlyTotal)}</td>
+                            <td>${yearlyClasses}</td>
+                            <td>${monthlyAvg}</td>
+                          </tr>`;
+            });
+            html += '</tbody></table>';
+        }
+
+        document.getElementById('stats-page-yearly-body').innerHTML = html;
     }
 
-    function closeStatsModal() {
-        document.getElementById('statsModal').classList.remove('open');
+    /* 匯出統計頁：每月統計（所有年度表格合併在同一張工作表，中間留空白列分隔）、每年統計 */
+    function exportStatsExcel() {
+        const sheets = [];
+
+        let monthlyAoa = [];
+        document.querySelectorAll('#stats-page-monthly-body table').forEach((tbl, i) => {
+            if (i > 0) monthlyAoa.push([]);
+            monthlyAoa = monthlyAoa.concat(tableToAOA(tbl));
+        });
+        if (monthlyAoa.length) sheets.push({ name: '每月統計', aoa: monthlyAoa });
+
+        const yearlyTable = document.querySelector('#stats-page-yearly-body table');
+        if (yearlyTable) sheets.push({ name: '每年統計', aoa: tableToAOA(yearlyTable) });
+
+        downloadWorkbook(sheets, `每月每年統計_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    /* 統計頁：Gemini AI 分析（每月＋每年收入狀況與建議） */
+    async function runStatsPageAiAnalysis() {
+        const resultEl = document.getElementById('stats-page-ai-result');
+        if (!resultEl) return;
+
+        if (!GEMINI_API_KEY || GEMINI_API_KEY === "YOUR_GEMINI_API_KEY") {
+            resultEl.textContent = '尚未設定 Gemini API 金鑰。請在程式碼中找到 GEMINI_API_KEY，換成你自己在 Google AI Studio 申請的金鑰後再試一次。';
+            return;
+        }
+
+        resultEl.textContent = '分析中，請稍候...';
+
+        try {
+            const { summary, grandTotal, grandClasses, startRocYear, endRocYear } = buildMonthlySummaryData();
+
+            let yearlyLines = [];
+            let monthlyLines = [];
+            for (let y = startRocYear; y >= endRocYear; y--) {
+                let yearlyTotal = 0, yearlyClasses = 0;
+                let monthsInYear = [];
+                for (let m = 12; m >= 1; m--) {
+                    if (summary[y] && summary[y][m]) {
+                        const d = summary[y][m];
+                        yearlyTotal += d.total;
+                        yearlyClasses += d.classes;
+                        if (d.total > 0 || d.classes > 0) {
+                            monthsInYear.push(`${y}年${m}月：${Math.round(d.total)}元（${d.classes}堂）`);
+                        }
+                    }
+                }
+                if (yearlyTotal <= 0 && yearlyClasses <= 0) continue;
+                yearlyLines.push(`${y}年：收入 ${Math.round(yearlyTotal)} 元，共 ${yearlyClasses} 堂課`);
+                monthlyLines = monthlyLines.concat(monthsInYear);
+            }
+
+            const promptText = `你是一位教學收入財務顧問，以下是一位在台灣經營中文家教／線上中文教學品牌「每天一分鐘」的老師的收入資料（幣別已統一換算為台幣）：
+
+【總累計】所有紀錄以來：收入 ${grandTotal} 元，共 ${grandClasses} 堂課
+
+【每年統計】
+${yearlyLines.join('\n') || '（尚無資料）'}
+
+【每月明細】
+${monthlyLines.join('\n') || '（尚無資料）'}
+
+請以繁體中文，針對以下兩點做簡短分析並給出具體建議：
+1. 每月收入狀況（波動、淡旺季、是否有明顯趨勢）
+2. 每年收入狀況（年度之間的成長或衰退，並提供可行的具體改善建議，例如招生、定價、學生留存等方向）
+
+請用條列式呈現，語氣專業但親切，總長度控制在 400 字以內。`;
+
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": GEMINI_API_KEY
+                    },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: promptText }] }]
+                    })
+                }
+            );
+
+            if (!response.ok) throw new Error('API 回應失敗：' + response.status);
+
+            const data = await response.json();
+            const text = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts)
+                ? data.candidates[0].content.parts.map(p => p.text || '').join('\n').trim()
+                : '';
+            resultEl.textContent = text || '沒有取得分析結果，請稍後再試。';
+        } catch (err) {
+            console.error(err);
+            resultEl.textContent = '分析失敗，請確認 API 金鑰是否正確、網路連線是否正常，再試一次。';
+        }
     }
 
     /* ============================================================
@@ -1489,6 +1776,54 @@ ${recentTrend.join('\n')}
             console.error(err);
             resultEl.textContent = '分析失敗，請確認 API 金鑰是否正確、網路連線是否正常，再試一次。';
         }
+    }
+
+    /* 把日曆的月份格線轉成二維陣列（AOA），盡量維持畫面上「一週一列日期＋六格收入」的樣子 */
+    function calendarTableToAOA() {
+        const table = document.querySelector('#calendar-area table.calendar-table');
+        if (!table) return [];
+        const aoa = [];
+        aoa.push(['一', '二', '三', '四', '五', '六', '日', '週結']);
+        const bodyRows = table.querySelectorAll('tbody tr');
+        bodyRows.forEach(tr => {
+            const cells = tr.querySelectorAll('td');
+            const dateRow = [];
+            const incomeRows = [[], [], [], [], [], []];
+            let weeklyTotal = '';
+            cells.forEach((td, idx) => {
+                if (idx === 7) { weeklyTotal = td.textContent.trim(); return; }
+                if (td.classList.contains('empty-day')) {
+                    dateRow.push('');
+                    for (let s = 0; s < 6; s++) incomeRows[s].push('');
+                    return;
+                }
+                const dateDiv = td.querySelector('.date-row');
+                dateRow.push(dateDiv ? dateDiv.textContent.trim() : '');
+                const inputs = td.querySelectorAll('.input-cell input');
+                for (let s = 0; s < 6; s++) incomeRows[s].push(inputs[s] ? inputs[s].value : '');
+            });
+            aoa.push(dateRow.concat(['']));
+            incomeRows.forEach((r, i) => aoa.push(r.concat([i === 0 ? weeklyTotal : ''])));
+        });
+        return aoa;
+    }
+
+    /* 匯出「每日上課收入」分頁：學生收費表、本月日曆、本月收入總覽、近期每月統計 */
+    function exportCalendarExcel() {
+        const sheets = [];
+
+        const studentTable = document.getElementById('studentTable');
+        if (studentTable) sheets.push({ name: '學生收費表', aoa: tableToAOA(studentTable) });
+
+        sheets.push({ name: `${currentYear - ROC_YEAR_OFFSET}年${currentMonth + 1}月日曆`, aoa: calendarTableToAOA() });
+
+        const summaryTable = document.querySelector('.summary-container table');
+        if (summaryTable) sheets.push({ name: '本月收入總覽', aoa: tableToAOA(summaryTable) });
+
+        const monthlyTable = document.querySelector('#monthly-summary-area table');
+        if (monthlyTable) sheets.push({ name: '近期每月統計', aoa: tableToAOA(monthlyTable) });
+
+        downloadWorkbook(sheets, `每日上課收入_${currentYear}-${String(currentMonth + 1).padStart(2, '0')}.xlsx`);
     }
 
     function calculateTotals() {
@@ -1802,53 +2137,107 @@ ${recentTrend.join('\n')}
         const v = (value === undefined || value === null) ? '' : value;
         if (editable) {
             const stepAttr = step ? ` step="${step}"` : '';
-            const evt = (type === 'text' || type === 'date') ? 'onchange' : 'oninput';
-            return `<td><input type="${type}"${stepAttr} value="${v}" ${evt}="updateField(${index}, '${field}', this.value)"></td>`;
+            const isImmediate = (type === 'text' || type === 'date');
+            const evt = isImmediate ? 'onchange' : 'oninput';
+            const handler = isImmediate
+                ? `updateField(${index}, '${field}', this.value)`
+                : `updateFieldLive(${index}, '${field}', this.value)`;
+            return `<td><input type="${type}"${stepAttr} data-field="${field}" value="${v}" ${evt}="${handler}"></td>`;
         }
-        return `<td><input type="${type}" class="readonly-cell" readonly value="${v}"></td>`;
+        return `<td><input type="${type}" class="readonly-cell" data-field="${field}" readonly value="${v}"></td>`;
+    }
+
+    /* 組出單一列（tr）的完整內容，供整表重繪與單列局部更新共用 */
+    function buildRowHtml(index, row) {
+        const currency = recalcRow(row);
+        const editable = FIELD_EDITABLE_BY_CURRENCY[currency || 'other'];
+        return fieldCell(index, 'date', row.date, editable.date, 'date') +
+            fieldCell(index, 'student', row.student, editable.student, 'text') +
+            fieldCell(index, 'fee', row.fee, editable.fee, 'text') +
+            fieldCell(index, 'remitted', row.remitted, editable.remitted, 'number', '0.01') +
+            fieldCell(index, 'actual', row.actual, editable.actual, 'number', '0.01') +
+            fieldCell(index, 'rate', row.rate, editable.rate, 'number', '0.01') +
+            fieldCell(index, 'twd', row.twd, editable.twd, 'number') +
+            fieldCell(index, 'convTwd', row.convTwd, editable.convTwd, 'number') +
+            fieldCell(index, 'classes', row.classes, editable.classes, 'number') +
+            fieldCell(index, 'method', row.method, editable.method, 'text') +
+            fieldCell(index, 'avg', row.avg, editable.avg, 'number') +
+            fieldCell(index, 'ppFee', row.ppFee, editable.ppFee, 'number') +
+            fieldCell(index, 'ppRate', row.ppRate, editable.ppRate, 'number') +
+            fieldCell(index, 'notes', row.notes, editable.notes, 'text') +
+            `<td style="background:#fff;"><button class="btn-delete" onclick="deleteRow(${index})" title="刪除">✖</button></td>`;
+    }
+
+    function refreshTotalConvertedTwd() {
+        let sumConvTwd = 0;
+        records.forEach(r => sumConvTwd += parseFloat(r.convTwd) || 0);
+        const totalConvertedElem = document.getElementById('totalConvertedTwd');
+        if (totalConvertedElem) totalConvertedElem.textContent = Math.round(sumConvTwd);
+    }
+
+    /* 數字欄位（匯入金額／實收金額／台幣／換算台幣／購買堂數）每打一個字都會觸發，
+       只局部更新該列，且用 preventScroll 保住游標與捲動位置，避免整表重繪造成畫面跳到最上方 */
+    function updateFieldLive(index, field, value) {
+        if (!records[index]) return;
+        records[index][field] = value;
+        saveData();
+
+        const tbody = document.getElementById('record-tbody');
+        const tr = tbody ? tbody.children[index] : null;
+        if (!tr) { renderTable(); return; }
+
+        const row = records[index];
+        const active = document.activeElement;
+        let activeField = null, selStart = null, selEnd = null;
+        if (active && tr.contains(active)) {
+            activeField = active.dataset.field;
+            selStart = active.selectionStart;
+            selEnd = active.selectionEnd;
+        }
+
+        tr.className = getMonthColorClass(row.date);
+        tr.innerHTML = buildRowHtml(index, row);
+
+        if (activeField) {
+            const newInput = tr.querySelector(`[data-field="${activeField}"]`);
+            if (newInput) {
+                newInput.focus({ preventScroll: true });
+                if (selStart !== null && newInput.setSelectionRange) {
+                    try { newInput.setSelectionRange(selStart, selEnd); } catch (e) {}
+                }
+            }
+        }
+
+        refreshTotalConvertedTwd();
+    }
+
+    /* 依收款日排序（由舊到新）；沒有日期的紀錄排到最後，維持原本相對順序 */
+    function sortRecordsByDate() {
+        records.sort((a, b) => {
+            const da = a.date || '', db = b.date || '';
+            if (!da && !db) return 0;
+            if (!da) return 1;
+            if (!db) return -1;
+            return da < db ? -1 : (da > db ? 1 : 0);
+        });
     }
 
     function renderTable() {
         const tbody = document.getElementById('record-tbody');
         if (!tbody) return;
+
+        sortRecordsByDate();
+
         tbody.innerHTML = '';
 
-        let sumConvTwd = 0;
-
         records.forEach((row, index) => {
-            const currency = recalcRow(row);
-            const editable = FIELD_EDITABLE_BY_CURRENCY[currency || 'other'];
-
             const tr = document.createElement('tr');
-            const colorClass = getMonthColorClass(row.date);
-            tr.className = colorClass;
-
-            tr.innerHTML =
-                fieldCell(index, 'date', row.date, editable.date, 'date') +
-                fieldCell(index, 'student', row.student, editable.student, 'text') +
-                fieldCell(index, 'fee', row.fee, editable.fee, 'text') +
-                fieldCell(index, 'remitted', row.remitted, editable.remitted, 'number', '0.01') +
-                fieldCell(index, 'actual', row.actual, editable.actual, 'number', '0.01') +
-                fieldCell(index, 'rate', row.rate, editable.rate, 'number', '0.01') +
-                fieldCell(index, 'twd', row.twd, editable.twd, 'number') +
-                fieldCell(index, 'convTwd', row.convTwd, editable.convTwd, 'number') +
-                fieldCell(index, 'classes', row.classes, editable.classes, 'number') +
-                fieldCell(index, 'method', row.method, editable.method, 'text') +
-                fieldCell(index, 'avg', row.avg, editable.avg, 'number') +
-                fieldCell(index, 'ppFee', row.ppFee, editable.ppFee, 'number') +
-                fieldCell(index, 'ppRate', row.ppRate, editable.ppRate, 'number') +
-                fieldCell(index, 'notes', row.notes, editable.notes, 'text') +
-                `<td style="background:#fff;"><button class="btn-delete" onclick="deleteRow(${index})" title="刪除">✖</button></td>`;
-
+            tr.className = getMonthColorClass(row.date);
+            tr.innerHTML = buildRowHtml(index, row);
             tbody.appendChild(tr);
-
-            sumConvTwd += parseFloat(row.convTwd) || 0;
         });
 
-        const totalConvertedElem = document.getElementById('totalConvertedTwd');
-        if (totalConvertedElem) {
-            totalConvertedElem.textContent = Math.round(sumConvTwd);
-        }
+        refreshTotalConvertedTwd();
     }
 
     function addRow() {
@@ -1869,7 +2258,7 @@ ${recentTrend.join('\n')}
         }
     }
 
-    /* 統一的欄位更新入口：更新後重新計算並重繪整列 */
+    /* 統一的欄位更新入口（date／text 欄位，onchange 觸發）：更新後重新計算並重繪整列 */
     function updateField(index, field, value) {
         records[index][field] = value;
         renderTable();
@@ -1958,6 +2347,16 @@ ${recentTrend.join('\n')}
         a.download = '實際收入紀錄.json';
         a.click();
         URL.revokeObjectURL(url);
+    }
+
+    /* 匯出「實際收入與匯款紀錄」表格，內容跟畫面上顯示的一模一樣（含目前輸入框裡的值） */
+    function exportRecordsExcel() {
+        const table = document.getElementById('recordTable');
+        if (!table) return;
+        const aoa = tableToAOA(table);
+        // 最後一欄是「操作」的刪除按鈕，匯出時沒有意義，移除該欄
+        aoa.forEach(row => { if (row.length) row.pop(); });
+        downloadWorkbook([{ name: '實際收入與匯款紀錄', aoa }], `實際收入與匯款紀錄_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
 
     /* ============================================================
@@ -2271,7 +2670,7 @@ const COLORS={
 };
 const COLOR_KEYS=Object.keys(COLORS);
 
-let schedule={},rates={},currentTZ=null,diffMin=0,currentCell=null,saveTimer=null;
+let schedule={},rates={},unstable={},currentTZ=null,diffMin=0,currentCell=null,saveTimer=null;
 
 // ── 正確的時區偏移計算 ──
 function getUTCOffsetMin(tz){
@@ -2342,7 +2741,7 @@ function schedSaveData(){
   const ref=scheduleDocRef();
   if(!ref){ setSaveStatus('error'); return; }
   setSaveStatus('saving');
-  window.firebaseSetDoc(ref,{schedule,rates,updatedAt:Date.now()},{merge:true})
+  window.firebaseSetDoc(ref,{schedule,rates,unstable,updatedAt:Date.now()},{merge:true})
     .then(()=>setSaveStatus('saved'))
     .catch(e=>{console.error(e);setSaveStatus('error');});
 }
@@ -2351,7 +2750,7 @@ function listenCloudData(){
   if(!ref) return;
   if(scheduleUnsub){ scheduleUnsub(); scheduleUnsub=null; }
   scheduleUnsub=window.firebaseOnSnapshot(ref,doc=>{
-    if(doc.exists()){const d=doc.data();if(d.schedule)schedule=d.schedule;if(d.rates)rates=d.rates;}
+    if(doc.exists()){const d=doc.data();if(d.schedule)schedule=d.schedule;if(d.rates)rates=d.rates;if(d.unstable)unstable=d.unstable;}
     scheduleCloudLoaded=true;
     setSaveStatus('saved');
     renderSched();
@@ -2383,11 +2782,28 @@ function getStudents(){
 
 function sessionCount(name){return Object.values(schedule).filter(e=>e&&e.name===name).length;}
 
+function isUnstable(name){return !!unstable[name];}
+
+function toggleUnstable(name,checked){
+  if(checked)unstable[name]=true;else delete unstable[name];
+  renderIncomeTable();renderDayGrid();schedRenderSummary();scheduleSave();
+}
+
 function incomePerDay(di){
   let t=0;
   TW_HOURS.forEach(h=>{
     const e=schedule[cellKey(h,di)];
     if(e&&e.name&&e.name!=='X')t+=(rates[e.name]||0);
+  });
+  return t;
+}
+
+/* 「預估最低」版本：排除被勾選為「不固定／不穩定」的學生 */
+function minIncomePerDay(di){
+  let t=0;
+  TW_HOURS.forEach(h=>{
+    const e=schedule[cellKey(h,di)];
+    if(e&&e.name&&e.name!=='X'&&!isUnstable(e.name))t+=(rates[e.name]||0);
   });
   return t;
 }
@@ -2571,6 +2987,7 @@ function renderIncomeTable(){
   const students=getStudents();
   Object.keys(rates).forEach(n=>{if(!students[n])delete rates[n];});
   Object.keys(students).forEach(n=>{if(rates[n]==null)rates[n]=0;});
+  Object.keys(unstable).forEach(n=>{if(!students[n])delete unstable[n];});
   const tbody=document.getElementById('rate-body');const tfoot=document.getElementById('rate-foot');
   tbody.innerHTML='';let weeklyTotal=0;
   Object.entries(students).forEach(([name,color])=>{
@@ -2582,7 +2999,8 @@ function renderIncomeTable(){
       <td class="num"><input class="rate-input" type="number" min="0" step="100" value="${rate}" data-name="${name}"/></td>
       <td class="num">${cnt}</td>
       <td class="num">${weekly>0?'NT$ '+weekly.toLocaleString():'—'}</td>
-      <td class="num">${monthly>0?'NT$ '+monthly.toLocaleString():'—'}</td>`;
+      <td class="num">${monthly>0?'NT$ '+monthly.toLocaleString():'—'}</td>
+      <td style="text-align:center"><input class="unstable-checkbox" type="checkbox" data-name="${name}" ${isUnstable(name)?'checked':''} title="上課狀況不固定，計算「預估最低收入」時排除這位學生"/></td>`;
     tbody.appendChild(tr);
   });
   const totalSessions=Object.keys(students).reduce((a,n)=>a+sessionCount(n),0);
@@ -2590,10 +3008,14 @@ function renderIncomeTable(){
   tfoot.innerHTML=`<tr><td></td><td style="font-weight:700">合計</td><td></td>
     <td class="num" style="font-weight:700">${totalSessions}</td>
     <td class="num" style="font-weight:700">${weeklyTotal>0?'NT$ '+weeklyTotal.toLocaleString():'—'}</td>
-    <td class="num" style="font-weight:700">${monthlyTotal>0?'NT$ '+monthlyTotal.toLocaleString():'—'}</td></tr>`;
+    <td class="num" style="font-weight:700">${monthlyTotal>0?'NT$ '+monthlyTotal.toLocaleString():'—'}</td>
+    <td></td></tr>`;
   document.querySelectorAll('.rate-input').forEach(inp=>{
     inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();inp.blur();commitRate(inp.dataset.name,inp.value);}};
     inp.onblur=()=>{commitRate(inp.dataset.name,inp.value);};
+  });
+  document.querySelectorAll('.unstable-checkbox').forEach(cb=>{
+    cb.onchange=()=>{toggleUnstable(cb.dataset.name,cb.checked);};
   });
   // 同步到「每日上課收入」分頁的學生收費表（只在雲端課表已載入過至少一次後才同步，避免用空資料誤蓋原本資料）
   if(scheduleCloudLoaded && typeof syncStudentsFromSchedule==='function') syncStudentsFromSchedule();
@@ -2613,6 +3035,29 @@ function renderDayGrid(){
       <div class="day-hrs">${hrs>0?hrs+'堂':''}</div>`;
     grid.appendChild(div);
   });
+
+  const unstableNames=Object.keys(unstable).filter(n=>getStudents()[n]);
+  const minSection=document.getElementById('min-day-section');
+  if(unstableNames.length>0){
+    minSection.style.display='';
+    document.getElementById('min-day-note').textContent=
+      `已排除以下上課狀況不固定的學生：${unstableNames.join('、')}（可在上方「學生收費設定」表格取消勾選）`;
+    const minGrid=document.getElementById('min-day-grid');minGrid.innerHTML='';
+    DAYS.forEach((_,di)=>{
+      const income=minIncomePerDay(di);
+      const hrs=TW_HOURS.filter(h=>{
+        const e=schedule[cellKey(h,di)];
+        return e&&e.name&&e.name!=='X'&&!isUnstable(e.name);
+      }).length;
+      const div=document.createElement('div');div.className='day-card';
+      div.innerHTML=`<div class="day-name">週${DAYS[di]}</div>
+        <div class="day-val">${income>0?'NT$<br>'+income.toLocaleString():'—'}</div>
+        <div class="day-hrs">${hrs>0?hrs+'堂':''}</div>`;
+      minGrid.appendChild(div);
+    });
+  }else{
+    minSection.style.display='none';
+  }
 }
 
 function schedRenderSummary(){
@@ -2633,6 +3078,73 @@ function schedRenderSummary(){
     <div class="card highlight"><div class="card-label">70% 授課率預估</div><div class="card-value">${monthly70>0?'NT$ '+monthly70.toLocaleString():'—'}</div><div class="card-sub">每月預估 × 70%</div></div>
     <div class="card"><div class="card-label">平均每堂收費</div><div class="card-value">${avg>0?'NT$ '+avg.toLocaleString():'—'}</div><div class="card-sub">全體平均</div></div>
     <div class="card"><div class="card-label">授課天數</div><div class="card-value">${activeDays} 天</div><div class="card-sub">每週上課日</div></div>`;
+
+  const unstableNames=Object.keys(unstable).filter(n=>students[n]);
+  const minSection=document.getElementById('min-summary-section');
+  if(unstableNames.length>0){
+    minSection.style.display='';
+    document.getElementById('min-summary-note').textContent=
+      `已排除以下上課狀況不固定的學生的收費：${unstableNames.join('、')}。此區塊數據可與上方「收入總覽」（納入全部學生）互相比較。`;
+
+    const stableStudents=Object.keys(students).filter(n=>!isUnstable(n));
+    const minWeeklyTotal=stableStudents.reduce((s,n)=>s+sessionCount(n)*(rates[n]||0),0);
+    const minMonthlyTotal=minWeeklyTotal*MONTHLY_MULT;const minMonthly70=Math.round(minMonthlyTotal*0.7);
+    const minTotalSessions=stableStudents.reduce((a,n)=>a+sessionCount(n),0);
+    const minActiveDays=DAYS.filter((_,di)=>TW_HOURS.some(h=>{
+      const e=schedule[cellKey(h,di)];
+      return e&&e.name&&e.name!=='X'&&!isUnstable(e.name);
+    })).length;
+    const minAvg=minTotalSessions>0?Math.round(minWeeklyTotal/minTotalSessions):0;
+
+    document.getElementById('min-summary-cards').innerHTML=`
+      <div class="card"><div class="card-label">每週最低收入</div><div class="card-value">${minWeeklyTotal>0?'NT$ '+minWeeklyTotal.toLocaleString():'—'}</div><div class="card-sub">${minTotalSessions} 堂／週</div></div>
+      <div class="card"><div class="card-label">每月最低預估收入</div><div class="card-value">${minMonthlyTotal>0?'NT$ '+minMonthlyTotal.toLocaleString():'—'}</div><div class="card-sub">× 4 週（100%）</div></div>
+      <div class="card highlight"><div class="card-label">70% 授課率最低預估</div><div class="card-value">${minMonthly70>0?'NT$ '+minMonthly70.toLocaleString():'—'}</div><div class="card-sub">每月最低預估 × 70%</div></div>
+      <div class="card"><div class="card-label">平均每堂收費</div><div class="card-value">${minAvg>0?'NT$ '+minAvg.toLocaleString():'—'}</div><div class="card-sub">穩定學生平均</div></div>
+      <div class="card"><div class="card-label">授課天數</div><div class="card-value">${minActiveDays} 天</div><div class="card-sub">穩定學生上課日</div></div>`;
+  }else{
+    minSection.style.display='none';
+  }
+}
+
+// ── 匯出 Excel（跟畫面上顯示的表格一模一樣） ──
+function exportScheduleExcel(){
+  const sheets=[];
+
+  const twTable=document.getElementById('tw-tbody') && document.getElementById('tw-tbody').closest('table');
+  if(twTable) sheets.push({name:'課程安排(台灣時間)', aoa:tableToAOA(twTable)});
+
+  const otTable=document.getElementById('ot-tbody') && document.getElementById('ot-tbody').closest('table');
+  if(otTable) sheets.push({name:'課程安排(對照時區)', aoa:tableToAOA(otTable)});
+
+  const rateTable=document.getElementById('rate-body') && document.getElementById('rate-body').closest('table');
+  if(rateTable) sheets.push({name:'學生收費設定', aoa:tableToAOA(rateTable)});
+
+  const dayAoa=[['星期','金額(NT$)','堂數']];
+  DAYS.forEach((_,di)=>{
+    const hrs=TW_HOURS.filter(h=>{const e=schedule[cellKey(h,di)];return e&&e.name&&e.name!=='X';}).length;
+    dayAoa.push(['週'+DAYS[di], incomePerDay(di)||0, hrs]);
+  });
+  const unstableNames=Object.keys(unstable).filter(n=>getStudents()[n]);
+  if(unstableNames.length>0){
+    dayAoa.push([]);
+    dayAoa.push(['預估最低每日收入（已排除：'+unstableNames.join('、')+'）']);
+    dayAoa.push(['星期','金額(NT$)','堂數']);
+    DAYS.forEach((_,di)=>{
+      const hrs=TW_HOURS.filter(h=>{const e=schedule[cellKey(h,di)];return e&&e.name&&e.name!=='X'&&!isUnstable(e.name);}).length;
+      dayAoa.push(['週'+DAYS[di], minIncomePerDay(di)||0, hrs]);
+    });
+  }
+  sheets.push({name:'每日收入', aoa:dayAoa});
+
+  let summaryAoa=cardsToAOA(document.getElementById('summary-cards'));
+  const minSummaryCards=document.getElementById('min-summary-cards');
+  if(unstableNames.length>0 && minSummaryCards){
+    summaryAoa=summaryAoa.concat([[],['預估最低收入總覽（已排除：'+unstableNames.join('、')+'）']], cardsToAOA(minSummaryCards));
+  }
+  sheets.push({name:'收入總覽', aoa:summaryAoa});
+
+  downloadWorkbook(sheets, `華語課表_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 // ── 匯出圖片 ──
@@ -2664,120 +3176,6 @@ function exportFreeImage(side){
     document.body.removeChild(wrap);
     const link=document.createElement('a');link.download=filename;link.href=canvas.toDataURL('image/png');link.click();
   }).catch(err=>{if(document.body.contains(wrap))document.body.removeChild(wrap);alert('匯出失敗：'+err.message);});
-}
-
-// ── 分享空檔連結 ──
-function showShareLink(){
-  const busyMap=buildOTBusyMap();
-  const otHours=getOTDisplayHours();
-  const payload={
-    tz:currentTZ.tz,
-    tzName:currentTZ.name,
-    tzLabel:getTZLabel(currentTZ.tz),
-    free:[],
-  };
-  DAYS.forEach((_,di)=>{
-    otHours.forEach(h=>{
-      const busy=busyMap[di]&&busyMap[di][h];
-      if(!busy) payload.free.push([di,h]);
-    });
-  });
-  payload.hours=otHours;
-
-  const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-  const baseUrl=window.location.href.split('#')[0].split('?')[0];
-  const shareUrl=baseUrl+'?view=free&data='+encoded;
-
-  document.getElementById('modal-mount').innerHTML=`<div class="share-popup"><div class="share-box">
-    <h3>🔗 分享空檔連結</h3>
-    <p>複製以下連結給學生，他們可以直接查看你目前的空檔時間（${currentTZ.name}）。</p>
-    <textarea class="share-url" readonly onclick="this.select()">${shareUrl}</textarea>
-    <div class="share-btns">
-      <button onclick="copyShareUrl('${shareUrl.replace(/'/g,"\\'")}')">複製連結</button>
-      <button onclick="window.open('${shareUrl.replace(/'/g,"\\'")}','_blank')">預覽頁面</button>
-      <button onclick="closeModal()">關閉</button>
-    </div>
-  </div></div>`;
-}
-
-function copyShareUrl(url){
-  navigator.clipboard.writeText(url).then(()=>{
-    alert('連結已複製！');
-  }).catch(()=>{
-    const ta=document.querySelector('.share-url');ta.select();document.execCommand('copy');
-    alert('連結已複製！');
-  });
-}
-
-// ── 學生檢視模式 ──
-function checkViewMode(){
-  const params=new URLSearchParams(window.location.search);
-  if(params.get('view')==='free'){
-    try{
-      const raw=params.get('data');
-      const payload=JSON.parse(decodeURIComponent(escape(atob(raw))));
-      renderStudentView(payload);
-      return true;
-    }catch(e){console.error(e);}
-  }
-  return false;
-}
-
-function renderStudentView(payload){
-  document.body.style.visibility='visible';
-  document.body.innerHTML='';
-  const style=document.createElement('style');
-  style.textContent=`
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;padding:18px;
-      background:radial-gradient(ellipse at top left, rgba(143,174,134,0.25), transparent 55%),
-        radial-gradient(ellipse at bottom right, rgba(195,154,69,0.12), transparent 55%),#f5f2e6;color:#1e3a2c}
-    .sv-header{background:#1e3a2c;border:1px solid #1e3a2c;border-radius:10px;padding:16px 20px;margin-bottom:20px;box-shadow:0 4px 14px rgba(30,58,44,0.25)}
-    .sv-header h1{font-family:'Noto Serif TC',serif;font-size:16px;font-weight:700;color:#f5f2e6;margin-bottom:8px}
-    .sv-header p{font-size:13px;color:#dfe9d8;line-height:1.6;margin:4px 0}
-    .sv-tz{font-size:12px;color:#c39a45;margin-top:8px;font-weight:700}
-    .tbl-wrap{overflow-x:auto}
-    table{border-collapse:collapse;font-size:11px;width:100%;min-width:480px;background:#fffdf7}
-    th{background:#5b4a37;color:#fff;font-weight:700;padding:5px 4px;border:1px solid #5b4a37;text-align:center;font-size:10px}
-    td.tc{background:#dfe9d8;color:#5b4a37;font-size:10px;padding:3px 5px;border:1px solid #c9bfa0;text-align:center;white-space:nowrap;width:70px;height:40px;vertical-align:middle}
-    td.ec{border:1px solid #c9bfa0;padding:2px;height:40px;vertical-align:middle}
-    .libre{background:#f3e6c4;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#5b4a37;border-radius:4px;border:1px solid #c39a45}
-    .busy{background:#5b4a37;height:100%;border-radius:4px}
-  `;
-  document.head.appendChild(style);
-
-  const header=document.createElement('div');header.className='sv-header';
-  header.innerHTML=`
-    <h1>📅 我的空檔時間 / Mis Horarios Disponibles</h1>
-    <p>這是目前我有的空檔時間，你可以依照你的空檔和我約上課時間。</p>
-    <p><em>Estos son mis horarios libres actuales. Puedes contactarme según tu disponibilidad para programar una clase.</em></p>
-    <div class="sv-tz">🌍 時區 / Zona horaria：${payload.tzName}（${payload.tzLabel}）</div>
-  `;
-  document.body.appendChild(header);
-
-  const days=['一','二','三','四','五','六','日'];
-  const freeSet=new Set(payload.free.map(([d,h])=>d+'_'+h));
-
-  const wrap=document.createElement('div');wrap.className='tbl-wrap';
-  const table=document.createElement('table');
-  const thead=document.createElement('thead');
-  thead.innerHTML='<tr><th>時間</th>'+days.map(d=>'<th>週'+d+'</th>').join('')+'</tr>';
-  table.appendChild(thead);
-  const tbody=document.createElement('tbody');
-  payload.hours.forEach(h=>{
-    const tr=document.createElement('tr');
-    const td=document.createElement('td');td.className='tc';
-    const hh=String(h).padStart(2,'0');const hh2=String((h+1)%24).padStart(2,'0');
-    td.textContent=hh+':00–'+hh2+':00';tr.appendChild(td);
-    days.forEach((_,di)=>{
-      const cell=document.createElement('td');cell.className='ec';
-      const isFree=freeSet.has(di+'_'+h);
-      cell.innerHTML=isFree?'<div class="libre">Libre</div>':'<div class="busy"></div>';
-      tr.appendChild(cell);
-    });
-    tbody.appendChild(tr);
-  });
-  table.appendChild(tbody);wrap.appendChild(table);document.body.appendChild(wrap);
 }
 
 // ── 新增/編輯 modal ──
@@ -2825,14 +3223,10 @@ function updateScheduleGateUI(user){
 }
 window.updateScheduleGateUI = updateScheduleGateUI;
 
-// ── 啟動：先判斷是否為「分享空檔連結」的唯讀檢視（若是，整頁會被換成學生檢視畫面）──
-const __scheduleShareView = checkViewMode();
-window.__scheduleShareView = __scheduleShareView;
-if(!__scheduleShareView){
-  document.body.style.visibility = 'visible';
-  // 課表本身要等登入生活帳本帳號後才會開始讀寫雲端（見 updateScheduleGateUI）
-  updateScheduleGateUI(null);
-}
+// ── 啟動 ──
+document.body.style.visibility = 'visible';
+// 課表本身要等登入生活帳本帳號後才會開始讀寫雲端（見 updateScheduleGateUI）
+updateScheduleGateUI(null);
 </script>
 </body>
 </html>
