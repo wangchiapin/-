@@ -1435,17 +1435,20 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         studentData = nextList;
         localStorage.setItem('studentFeeData', JSON.stringify(studentData));
         renderStudents();
+        dailyIncomeSave();
     }
 
     function updateStudent(index, field, value) {
         studentData[index][field] = value;
         localStorage.setItem('studentFeeData', JSON.stringify(studentData));
+        dailyIncomeSave();
     }
 
     function updateStudentColor(index, value) {
         studentData[index].bg = value;
         localStorage.setItem('studentFeeData', JSON.stringify(studentData));
         renderStudents();
+        dailyIncomeSave();
     }
 
     function toHexColor(color) {
@@ -1533,6 +1536,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
     function saveIncomeData() {
         localStorage.setItem('classIncomeData', JSON.stringify(incomeData));
         calculateTotals();
+        dailyIncomeSave();
     }
 
     function changeMonth(offset) {
@@ -2425,6 +2429,7 @@ ${recentTrend.join('\n')}
         localStorage.setItem('actualIncomeRecords', JSON.stringify(records));
         renderSummary();
         scheduleTeachingIncomeSync();
+        actualSave();
     }
 
     function getMonthColorClass(dateStr) {
@@ -3082,7 +3087,124 @@ ${monthLines.join('\n') || '（尚無資料）'}
         if (typeof window.updateStdGateUI === 'function') {
             window.updateStdGateUI(user);
         }
+        // 「每日上課收入」（學生收費表＋日曆紀錄）與「實際收入紀錄」，改成跟課表一樣真的存進 Firestore、多裝置同步
+        if (user) {
+            initDailyIncomeCloudSync();
+            initActualCloudSync();
+        } else {
+            stopDailyIncomeCloudSync();
+            stopActualCloudSync();
+        }
     };
+
+    /* ============================================================
+       「每日上課收入」（studentFeeData + classIncomeData）雲端同步
+       規則：第一次登入、雲端這份文件完全不存在時，以「當下這台裝置」的
+       本機資料當作基準版本上傳；雲端一旦已經有資料，之後一律以雲端為準
+       （這樣才不會被某台裝置的舊/空本機資料反過來蓋掉別台裝置的真實資料）。
+    ============================================================ */
+    let dailyIncomeUnsub = null;
+    let dailyIncomeSaveTimer = null;
+    let dailyIncomeMigrationDone = false;
+
+    function dailyIncomeDocRef(){
+        if (!window.ledgerUid) return null;
+        return window.firebaseDoc(window.firebaseDb, "dailyIncome", window.ledgerUid);
+    }
+
+    function dailyIncomeSaveNow(){
+        const ref = dailyIncomeDocRef();
+        if (!ref) return;
+        window.firebaseSetDoc(ref, { studentFeeData, classIncomeData, updatedAt: Date.now() })
+            .catch(e => console.error('每日上課收入 雲端儲存失敗', e));
+    }
+    function dailyIncomeSave(){
+        clearTimeout(dailyIncomeSaveTimer);
+        dailyIncomeSaveTimer = setTimeout(dailyIncomeSaveNow, 600);
+    }
+
+    async function initDailyIncomeCloudSync(){
+        const ref = dailyIncomeDocRef();
+        if (!ref) return;
+        if (!dailyIncomeMigrationDone) {
+            dailyIncomeMigrationDone = true;
+            try {
+                const snap = await window.firebaseGetDoc(ref);
+                if (!snap.exists()) {
+                    // 雲端還沒有這份資料 → 把「這台裝置」目前的本機資料當成第一版搬上雲端
+                    console.log('[每日上課收入] 雲端尚無資料，正在把本機資料上傳為初始版本...');
+                    await window.firebaseSetDoc(ref, { studentFeeData, classIncomeData, updatedAt: Date.now() });
+                    console.log('[每日上課收入] 本機資料已成功上傳為雲端初始版本 ✓');
+                }
+            } catch (e) { console.error('[每日上課收入] 首次同步檢查失敗', e); }
+        }
+        if (dailyIncomeUnsub) { dailyIncomeUnsub(); dailyIncomeUnsub = null; }
+        dailyIncomeUnsub = window.firebaseOnSnapshot(ref, doc => {
+            if (doc.exists()) {
+                const d = doc.data();
+                if (d.studentFeeData) { studentData = d.studentFeeData; localStorage.setItem('studentFeeData', JSON.stringify(studentData)); }
+                if (d.classIncomeData) { incomeData = d.classIncomeData; localStorage.setItem('classIncomeData', JSON.stringify(incomeData)); }
+            }
+            if (typeof renderStudents === 'function') renderStudents();
+            if (typeof renderCalendar === 'function') renderCalendar();
+        }, err => console.error('[每日上課收入] 雲端監聽失敗', err));
+    }
+    function stopDailyIncomeCloudSync(){
+        if (dailyIncomeUnsub) { dailyIncomeUnsub(); dailyIncomeUnsub = null; }
+        dailyIncomeMigrationDone = false;
+    }
+
+    /* ============================================================
+       「實際收入紀錄」（actualIncomeRecords）雲端同步，邏輯同上
+    ============================================================ */
+    let actualUnsub = null;
+    let actualSaveTimer = null;
+    let actualMigrationDone = false;
+
+    function actualDocRef(){
+        if (!window.ledgerUid) return null;
+        return window.firebaseDoc(window.firebaseDb, "actualRecords", window.ledgerUid);
+    }
+
+    function actualSaveNow(){
+        const ref = actualDocRef();
+        if (!ref) return;
+        window.firebaseSetDoc(ref, { records, updatedAt: Date.now() })
+            .catch(e => console.error('實際收入紀錄 雲端儲存失敗', e));
+    }
+    function actualSave(){
+        clearTimeout(actualSaveTimer);
+        actualSaveTimer = setTimeout(actualSaveNow, 600);
+    }
+
+    async function initActualCloudSync(){
+        const ref = actualDocRef();
+        if (!ref) return;
+        if (!actualMigrationDone) {
+            actualMigrationDone = true;
+            try {
+                const snap = await window.firebaseGetDoc(ref);
+                if (!snap.exists()) {
+                    console.log('[實際收入紀錄] 雲端尚無資料，正在把本機資料上傳為初始版本...');
+                    await window.firebaseSetDoc(ref, { records, updatedAt: Date.now() });
+                    console.log('[實際收入紀錄] 本機資料已成功上傳為雲端初始版本 ✓');
+                }
+            } catch (e) { console.error('[實際收入紀錄] 首次同步檢查失敗', e); }
+        }
+        if (actualUnsub) { actualUnsub(); actualUnsub = null; }
+        actualUnsub = window.firebaseOnSnapshot(ref, doc => {
+            if (doc.exists()) {
+                const d = doc.data();
+                if (d.records) { records = d.records; localStorage.setItem('actualIncomeRecords', JSON.stringify(records)); }
+            }
+            if (typeof renderTable === 'function') renderTable();
+            if (typeof renderSummary === 'function') renderSummary();
+        }, err => console.error('[實際收入紀錄] 雲端監聽失敗', err));
+    }
+    function stopActualCloudSync(){
+        if (actualUnsub) { actualUnsub(); actualUnsub = null; }
+        actualMigrationDone = false;
+    }
 </script>
 <script>
 // ── Firebase（改為與「每日上課收入與學生收費紀錄表」共用同一個 moneybook 專案）──
