@@ -2061,7 +2061,7 @@ ${monthlyLines.join('\n') || '（尚無資料）'}
        透過自己的後端小程式轉發請求，金鑰只放在後端，不要放在前端。
     ============================================================ */
     const GEMINI_API_KEY = "%%GEMINI_API_KEY%%"; // 部署時由 GitHub Actions 自動換成真正的金鑰，git 裡永遠只會看到這個佔位符
-    const GEMINI_MODEL = "gemini-2.5-flash";
+    const GEMINI_MODEL = "gemini-flash-latest"; // 用「latest」別名而不是寫死版本號，之後 Google 換版本也不會再變成 404
 
     function openAiModal() {
         document.getElementById('aiModal').classList.add('open');
