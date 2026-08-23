@@ -635,6 +635,9 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
     .header-cell{background:var(--forest-light); color:#fff;}
     .data-cell{background:var(--forest-pale);}
     .total-cell, .avg-cell{background:var(--forest-gold); font-weight:700; color:var(--forest-deep);}
+    .summary-table2-stacked{width:100%; margin-bottom:14px; table-layout:fixed;}
+    .summary-table2-stacked th, .summary-table2-stacked td{padding:6px 8px;}
+    .summary-table2-stacked .header-cell{width:45%;}
 
     /* ===== 每月統計標題按鈕 & 完整統計彈窗 ===== */
     .stats-btn{
@@ -2715,49 +2718,81 @@ ${recentTrend.join('\n')}
             sortedYears = [currentRocYear - 1, currentRocYear, currentRocYear + 1];
         }
 
-        let html = '<table class="summary-table2">';
-        html += '<thead><tr>';
-        sortedYears.forEach(y => {
-            html += `<th class="header-cell" colspan="2">${y}年</th>`;
-        });
-        html += '</tr></thead><tbody>';
-
         let totals = {};
         sortedYears.forEach(y => totals[y] = 0);
         let activeMonths = {};
         sortedYears.forEach(y => activeMonths[y] = 0);
-
-        for (let m = 1; m <= 12; m++) {
-            html += '<tr>';
-            sortedYears.forEach(y => {
+        // 先跑一次算出每年的合計／平均（並排版與堆疊版共用）
+        sortedYears.forEach(y => {
+            for (let m = 1; m <= 12; m++) {
                 let val = summaryMap[y] && summaryMap[y][m] ? summaryMap[y][m] : 0;
                 totals[y] += val;
                 if (val > 0) activeMonths[y]++;
+            }
+        });
 
-                html += `<td class="header-cell">${y}年${m}月</td>`;
-                html += `<td class="data-cell">${val > 0 ? Math.round(val) : ''}</td>`;
+        const isNarrow = window.innerWidth <= 700; // 手機／窄螢幕：改成每年一張表、上下堆疊
+        let html = '';
+
+        if (isNarrow) {
+            // 由新到舊排列，最新一年放最上面，捲動起來比較順手
+            [...sortedYears].reverse().forEach(y => {
+                const avg = activeMonths[y] > 0 ? Math.round(totals[y] / activeMonths[y]) : 0;
+                html += `<table class="summary-table2 summary-table2-stacked">
+                            <thead><tr><th class="header-cell" colspan="2">${y}年</th></tr></thead>
+                            <tbody>`;
+                for (let m = 12; m >= 1; m--) {
+                    let val = summaryMap[y] && summaryMap[y][m] ? summaryMap[y][m] : 0;
+                    html += `<tr><td class="header-cell">${m}月</td><td class="data-cell">${val > 0 ? Math.round(val) : ''}</td></tr>`;
+                }
+                html += `<tr><td class="total-cell">共計</td><td class="data-cell">${Math.round(totals[y])}</td></tr>
+                          <tr><td class="avg-cell">平均每月</td><td class="data-cell">${avg}</td></tr>`;
+                html += '</tbody></table>';
+            });
+        } else {
+            html += '<table class="summary-table2">';
+            html += '<thead><tr>';
+            sortedYears.forEach(y => {
+                html += `<th class="header-cell" colspan="2">${y}年</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            for (let m = 1; m <= 12; m++) {
+                html += '<tr>';
+                sortedYears.forEach(y => {
+                    let val = summaryMap[y] && summaryMap[y][m] ? summaryMap[y][m] : 0;
+                    html += `<td class="header-cell">${y}年${m}月</td>`;
+                    html += `<td class="data-cell">${val > 0 ? Math.round(val) : ''}</td>`;
+                });
+                html += '</tr>';
+            }
+
+            html += '<tr>';
+            sortedYears.forEach(y => {
+                html += `<td class="total-cell">共計</td>`;
+                html += `<td class="data-cell">${Math.round(totals[y])}</td>`;
             });
             html += '</tr>';
+
+            html += '<tr>';
+            sortedYears.forEach(y => {
+                let avg = activeMonths[y] > 0 ? Math.round(totals[y] / activeMonths[y]) : 0;
+                html += `<td class="avg-cell">平均每月</td>`;
+                html += `<td class="data-cell">${avg}</td>`;
+            });
+            html += '</tr>';
+
+            html += '</tbody></table>';
         }
 
-        html += '<tr>';
-        sortedYears.forEach(y => {
-            html += `<td class="total-cell">共計</td>`;
-            html += `<td class="data-cell">${Math.round(totals[y])}</td>`;
-        });
-        html += '</tr>';
-
-        html += '<tr>';
-        sortedYears.forEach(y => {
-            let avg = activeMonths[y] > 0 ? Math.round(totals[y] / activeMonths[y]) : 0;
-            html += `<td class="avg-cell">平均每月</td>`;
-            html += `<td class="data-cell">${avg}</td>`;
-        });
-        html += '</tr>';
-
-        html += '</tbody></table>';
         target.innerHTML = html;
     }
+    // 螢幕寬度改變時（例如轉螢幕方向）重新渲染，確保並排／堆疊樣式即時切換
+    let summaryResizeTimer = null;
+    window.addEventListener('resize', () => {
+        clearTimeout(summaryResizeTimer);
+        summaryResizeTimer = setTimeout(() => { if (typeof renderSummary === 'function') renderSummary(); }, 250);
+    });
 
     function exportData() {
         const dataStr = JSON.stringify(records, null, 2);
