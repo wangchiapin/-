@@ -3115,7 +3115,7 @@ ${monthLines.join('\n') || '（尚無資料）'}
     function dailyIncomeSaveNow(){
         const ref = dailyIncomeDocRef();
         if (!ref) return;
-        window.firebaseSetDoc(ref, { studentFeeData, classIncomeData, updatedAt: Date.now() })
+        window.firebaseSetDoc(ref, { studentFeeData: studentData, classIncomeData: incomeData, updatedAt: Date.now() })
             .catch(e => console.error('每日上課收入 雲端儲存失敗', e));
     }
     function dailyIncomeSave(){
@@ -3133,7 +3133,7 @@ ${monthLines.join('\n') || '（尚無資料）'}
                 if (!snap.exists()) {
                     // 雲端還沒有這份資料 → 把「這台裝置」目前的本機資料當成第一版搬上雲端
                     console.log('[每日上課收入] 雲端尚無資料，正在把本機資料上傳為初始版本...');
-                    await window.firebaseSetDoc(ref, { studentFeeData, classIncomeData, updatedAt: Date.now() });
+                    await window.firebaseSetDoc(ref, { studentFeeData: studentData, classIncomeData: incomeData, updatedAt: Date.now() });
                     console.log('[每日上課收入] 本機資料已成功上傳為雲端初始版本 ✓');
                 }
             } catch (e) { console.error('[每日上課收入] 首次同步檢查失敗', e); }
