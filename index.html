@@ -4695,8 +4695,9 @@ window.updateStdGateUI = updateStdGateUI;
      時間欄／預付倒數欄），所以先手動 blur() 讓 onchange 觸發的重繪跑完，
      才重新從 DOM 抓「新」的目標格，避免抓到已經被換掉的舊節點
 ============================================================ */
-function setupGridKeyNav(containerEl, tbodyId) {
+function setupGridKeyNav(containerEl, tbodyId, scrollEl) {
     if (!containerEl) return;
+    const scroller = scrollEl || containerEl;
     containerEl.addEventListener('keydown', function (e) {
         const el = e.target;
         if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA')) return;
@@ -4710,9 +4711,17 @@ function setupGridKeyNav(containerEl, tbodyId) {
         if (rowIndex < 0 || colIndex < 0) return;
 
         const isTextarea = el.tagName === 'TEXTAREA';
-        const selStart = el.selectionStart, selEnd = el.selectionEnd;
-        const atStart = selStart === 0 && selEnd === 0;
-        const atEnd = selStart === el.value.length && selEnd === el.value.length;
+        // type="date" 等原生輸入框不支援 selectionStart/selectionEnd，讀取會直接丟例外，
+        // 導致整個處理函式中斷、連 preventDefault 都不會執行。這種欄位就直接視為
+        // 「沒有游標位置概念」，方向鍵一律當作跳格處理
+        let selStart = 0, selEnd = 0, hasSelection = true;
+        try {
+            selStart = el.selectionStart;
+            selEnd = el.selectionEnd;
+            if (selStart === null || selEnd === null || selStart === undefined) hasSelection = false;
+        } catch (err) { hasSelection = false; }
+        const atStart = !hasSelection || (selStart === 0 && selEnd === 0);
+        const atEnd = !hasSelection || (selStart === el.value.length && selEnd === el.value.length);
 
         let targetRow = rowIndex, targetCol = colIndex, dir = 0, handled = false;
 
@@ -4734,38 +4743,49 @@ function setupGridKeyNav(containerEl, tbodyId) {
         if (!handled) return;
 
         e.preventDefault();
-        el.blur(); // 讓目前這格可能觸發的整表／整列重繪先跑完，再去抓新節點
+        el.blur(); // el.blur() 觸發的 change 事件是同步跑完的，若有整表/整列重繪，這裡就已經跑完了
 
-        setTimeout(function () {
-            const freshTbody = document.getElementById(tbodyId);
-            if (!freshTbody) return;
-            const rows = freshTbody.children;
-            if (targetRow < 0 || targetRow >= rows.length) return;
-            const cells = rows[targetRow].children;
-            let c = targetCol, input = null;
-            if (dir === 0) {
-                if (c >= 0 && c < cells.length) input = cells[c].querySelector('input, textarea');
-            } else {
-                while (c >= 0 && c < cells.length) {
-                    input = cells[c].querySelector('input, textarea');
-                    if (input) break;
-                    c += dir;
-                }
+        // 不用 setTimeout：跳格跟可能發生的捲動要在同一輪同步完成，
+        // 中間不留「暫時沒有任何欄位被聚焦」的空檔，避免可捲動容器趁機搶走焦點
+        const freshTbody = document.getElementById(tbodyId);
+        if (!freshTbody) return;
+        const rows = freshTbody.children;
+        if (targetRow < 0 || targetRow >= rows.length) return;
+        const cells = rows[targetRow].children;
+        let c = targetCol, input = null;
+        if (dir === 0) {
+            if (c >= 0 && c < cells.length) input = cells[c].querySelector('input, textarea');
+        } else {
+            while (c >= 0 && c < cells.length) {
+                input = cells[c].querySelector('input, textarea');
+                if (input) break;
+                c += dir;
             }
-            if (input) {
-                // 用 preventScroll 先擋掉瀏覽器「聚焦就自動捲動」的預設行為，
-                // 改成我們自己判斷：只有目標欄位真的被擋在可視範圍外時才手動捲，
-                // 這樣一般在畫面內跳格就完全不會有捲動感；真的跳出畫面外才會捲，
-                // 且只捲「剛好看得到」的距離，不會整個跳到最遠端
-                input.focus({ preventScroll: true });
-                if (typeof input.select === 'function') input.select();
-                input.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-            }
-        }, 0);
+        }
+        if (!input) return;
+
+        input.focus({ preventScroll: true });
+        if (typeof input.select === 'function') input.select();
+
+        // 自己算要不要捲、捲多少：只有目標欄位真的被容器邊界擋住看不到時才捲，
+        // 而且是跟著這次跳格「同步」捲，不是交給瀏覽器自己決定時機
+        const wrapRect = scroller.getBoundingClientRect();
+        const elRect = input.getBoundingClientRect();
+        const margin = 12;
+        if (elRect.left < wrapRect.left) {
+            scroller.scrollLeft -= (wrapRect.left - elRect.left) + margin;
+        } else if (elRect.right > wrapRect.right) {
+            scroller.scrollLeft += (elRect.right - wrapRect.right) + margin;
+        }
+        if (elRect.top < wrapRect.top) {
+            scroller.scrollTop -= (wrapRect.top - elRect.top) + margin;
+        } else if (elRect.bottom > wrapRect.bottom) {
+            scroller.scrollTop += (elRect.bottom - wrapRect.bottom) + margin;
+        }
     });
 }
 setupGridKeyNav(document.getElementById('recordTableWrap'), 'record-tbody');
-setupGridKeyNav(document.getElementById('stdClassesTable'), 'stdClassesTbody');
+setupGridKeyNav(document.getElementById('stdClassesTable'), 'stdClassesTbody', document.querySelector('#stdClassesTable').closest('.table-wrap'));
 
 // ── 啟動 ──
 document.body.style.visibility = 'visible';
