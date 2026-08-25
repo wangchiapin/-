@@ -4765,7 +4765,19 @@ function setupGridKeyNav(containerEl, tbodyId, scrollEl) {
         if (!input) return;
 
         input.focus({ preventScroll: true });
-        if (typeof input.select === 'function') input.select();
+        // 左右移動時，游標要直接放在移動方向那一端（而不是整格全選），
+        // 這樣才能連續按方向鍵一路跳過去；如果用 select() 整格全選，
+        // 下一次按方向鍵瀏覽器會先把選取範圍收合成游標、不會真的跳格，
+        // 等於每跳一次就要多按一次方向鍵才會繼續走，體感像卡住
+        if (dir === 1 && typeof input.setSelectionRange === 'function') {
+            const len = input.value.length;
+            try { input.setSelectionRange(len, len); } catch (err) {}
+        } else if (dir === -1 && typeof input.setSelectionRange === 'function') {
+            try { input.setSelectionRange(0, 0); } catch (err) {}
+        } else if (typeof input.select === 'function') {
+            // 上下移動（Enter／↑／↓）沒有連續跳格的問題，維持全選方便直接輸入覆蓋
+            input.select();
+        }
 
         // 自己算要不要捲、捲多少：只有目標欄位真的被容器邊界擋住看不到時才捲，
         // 而且是跟著這次跳格「同步」捲，不是交給瀏覽器自己決定時機
