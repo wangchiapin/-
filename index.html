@@ -3162,6 +3162,9 @@ ${monthLines.join('\n') || '（尚無資料）'}
         }
         if (dailyIncomeUnsub) { dailyIncomeUnsub(); dailyIncomeUnsub = null; }
         dailyIncomeUnsub = window.firebaseOnSnapshot(ref, doc => {
+            // 忽略「自己剛剛寫入、還沒被伺服器確認」的本機回音，
+            // 避免打字時每次 debounce 儲存都觸發整頁重繪、把游標/焦點沖掉
+            if (doc.metadata && doc.metadata.hasPendingWrites) return;
             if (doc.exists()) {
                 const d = doc.data();
                 if (d.studentFeeData) { studentData = d.studentFeeData; localStorage.setItem('studentFeeData', JSON.stringify(studentData)); }
@@ -3215,6 +3218,12 @@ ${monthLines.join('\n') || '（尚無資料）'}
         }
         if (actualUnsub) { actualUnsub(); actualUnsub = null; }
         actualUnsub = window.firebaseOnSnapshot(ref, doc => {
+            // 忽略本機自己寫入造成的回音（hasPendingWrites），
+            // 這是造成「輸入實際收入時，一陣子後整頁當掉/不能動」的主因：
+            // 每次 oninput → 600ms 後寫回 Firestore → 監聽器又立刻收到自己這筆
+            // 寫入的本機回音 → 觸發 renderTable() 整表重繪、搶走輸入框焦點，
+            // 打字打到一半游標被打斷，且隨紀錄筆數增加重繪成本越來越高。
+            if (doc.metadata && doc.metadata.hasPendingWrites) return;
             if (doc.exists()) {
                 const d = doc.data();
                 if (d.records) { records = d.records; localStorage.setItem('actualIncomeRecords', JSON.stringify(records)); }
@@ -3376,6 +3385,7 @@ function listenCloudData(){
   if(!ref) return;
   if(scheduleUnsub){ scheduleUnsub(); scheduleUnsub=null; }
   scheduleUnsub=window.firebaseOnSnapshot(ref,doc=>{
+    if(doc.metadata && doc.metadata.hasPendingWrites) return; // 忽略本機寫入回音
     if(doc.exists()){const d=doc.data();if(d.schedule)schedule=d.schedule;if(d.rates)rates=d.rates;unstable=d.unstable||{};retired=d.retired||{};}
     scheduleCloudLoaded=true;
     setSaveStatus('saved');
@@ -4007,6 +4017,7 @@ function listenStdCloudData(){
     if(!ref) return;
     if(stdUnsub){ stdUnsub(); stdUnsub = null; }
     stdUnsub = window.firebaseOnSnapshot(ref, doc => {
+        if(doc.metadata && doc.metadata.hasPendingWrites) return; // 忽略本機寫入回音
         if(doc.exists()){
             const d = doc.data();
             stdDb = d.data || {};
