@@ -4681,6 +4681,85 @@ window.updateStdGateUI = updateStdGateUI;
 </script>
 
 <script>
+/* ============================================================
+   表格鍵盤導覽：「實際收入紀錄」與「學生上課狀況／課程紀錄」共用
+   - Enter／↓：跳到下一列同一欄；↑：跳到上一列同一欄
+   - ←／→：游標已經在欄位「最前／最後」時才跳到左右鄰欄（欄位中間按左右鍵，
+     還是維持一般文字游標移動，不會誤跳格）；若該欄某列剛好沒有輸入框（例如
+     刪除鈕那欄），會自動往同方向找下一個有輸入框的欄位
+   - 監聽器綁在「不會被整表重繪換掉」的外層容器（用事件冒泡代理），
+     所以不用每次 renderTable／stdRenderClasses 之後重新綁定
+   - 有些欄位的 onchange 會整表或整列重繪（例如實際收入的日期欄、課程紀錄的
+     時間欄／預付倒數欄），所以先手動 blur() 讓 onchange 觸發的重繪跑完，
+     才重新從 DOM 抓「新」的目標格，避免抓到已經被換掉的舊節點
+============================================================ */
+function setupGridKeyNav(containerEl, tbodyId) {
+    if (!containerEl) return;
+    containerEl.addEventListener('keydown', function (e) {
+        const el = e.target;
+        if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA')) return;
+        const tbody = document.getElementById(tbodyId);
+        if (!tbody) return;
+        const tr = el.closest('tr');
+        if (!tr || tr.parentElement !== tbody) return;
+        const td = el.closest('td');
+        const rowIndex = Array.prototype.indexOf.call(tbody.children, tr);
+        const colIndex = Array.prototype.indexOf.call(tr.children, td);
+        if (rowIndex < 0 || colIndex < 0) return;
+
+        const isTextarea = el.tagName === 'TEXTAREA';
+        const selStart = el.selectionStart, selEnd = el.selectionEnd;
+        const atStart = selStart === 0 && selEnd === 0;
+        const atEnd = selStart === el.value.length && selEnd === el.value.length;
+
+        let targetRow = rowIndex, targetCol = colIndex, dir = 0, handled = false;
+
+        if (e.key === 'Enter' && !e.shiftKey) {
+            targetRow = rowIndex + 1; handled = true;
+        } else if (e.key === 'ArrowDown') {
+            if (isTextarea && !atEnd) return;
+            targetRow = rowIndex + 1; handled = true;
+        } else if (e.key === 'ArrowUp') {
+            if (isTextarea && !atStart) return;
+            targetRow = rowIndex - 1; handled = true;
+        } else if (e.key === 'ArrowRight') {
+            if (!atEnd) return;
+            targetCol = colIndex + 1; dir = 1; handled = true;
+        } else if (e.key === 'ArrowLeft') {
+            if (!atStart) return;
+            targetCol = colIndex - 1; dir = -1; handled = true;
+        }
+        if (!handled) return;
+
+        e.preventDefault();
+        el.blur(); // 讓目前這格可能觸發的整表／整列重繪先跑完，再去抓新節點
+
+        setTimeout(function () {
+            const freshTbody = document.getElementById(tbodyId);
+            if (!freshTbody) return;
+            const rows = freshTbody.children;
+            if (targetRow < 0 || targetRow >= rows.length) return;
+            const cells = rows[targetRow].children;
+            let c = targetCol, input = null;
+            if (dir === 0) {
+                if (c >= 0 && c < cells.length) input = cells[c].querySelector('input, textarea');
+            } else {
+                while (c >= 0 && c < cells.length) {
+                    input = cells[c].querySelector('input, textarea');
+                    if (input) break;
+                    c += dir;
+                }
+            }
+            if (input) {
+                input.focus();
+                if (typeof input.select === 'function') input.select();
+            }
+        }, 0);
+    });
+}
+setupGridKeyNav(document.getElementById('recordTableWrap'), 'record-tbody');
+setupGridKeyNav(document.getElementById('stdClassesTable'), 'stdClassesTbody');
+
 // ── 啟動 ──
 document.body.style.visibility = 'visible';
 // 課表與學生上課狀況管理系統本身要等登入生活帳本帳號後才會開始讀寫雲端
