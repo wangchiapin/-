@@ -2440,9 +2440,19 @@ ${recentTrend.join('\n')}
         saveData();
     }
 
+    let summaryDebounceTimer = null;
+    /* renderSummary() 要重新分組整年度、重建整張統計表格的 innerHTML，成本不低；
+       saveData() 卻是每打一個字（oninput）就會呼叫一次，等於「每打一個字就重建一次年度統計表」。
+       資料筆數一多，這個同步重繪會塞住主執行緒，手機上就會出現畫面卡住、
+       捲動時大片空白來不及貼圖的情形。改成 debounce，停手打字一小段時間後才重繪一次即可。 */
+    function scheduleRenderSummary() {
+        clearTimeout(summaryDebounceTimer);
+        summaryDebounceTimer = setTimeout(renderSummary, 500);
+    }
+
     function saveData() {
         localStorage.setItem('actualIncomeRecords', JSON.stringify(records));
-        renderSummary();
+        scheduleRenderSummary();
         scheduleTeachingIncomeSync();
         actualSave();
     }
