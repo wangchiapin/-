@@ -4751,7 +4751,9 @@ function setupGridKeyNav(containerEl, tbodyId) {
                 }
             }
             if (input) {
-                input.focus();
+                // 加 preventScroll，避免瀏覽器自動把捲動位置搬到目標欄位，
+                // 造成左右跳格時畫面先跳一下捲軸才落到新欄位、體感很跳
+                input.focus({ preventScroll: true });
                 if (typeof input.select === 'function') input.select();
             }
         }, 0);
