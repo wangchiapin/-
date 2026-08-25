@@ -635,9 +635,11 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
     .header-cell{background:var(--forest-light); color:#fff;}
     .data-cell{background:var(--forest-pale);}
     .total-cell, .avg-cell{background:var(--forest-gold); font-weight:700; color:var(--forest-deep);}
-    .summary-table2-stacked{width:100%; margin-bottom:14px; table-layout:fixed;}
-    .summary-table2-stacked th, .summary-table2-stacked td{padding:6px 8px;}
-    .summary-table2-stacked .header-cell{width:45%;}
+    .summary-scroll-wrap{width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; margin-bottom:6px;}
+    .summary-scroll-wrap .summary-table2{table-layout:fixed;}
+    .summary-scroll-wrap .summary-table2 th, .summary-scroll-wrap .summary-table2 td{white-space:nowrap;}
+    .summary-scroll-wrap .header-cell{min-width:52px;}
+    .summary-scroll-wrap .data-cell{min-width:62px;}
 
     /* ===== 每月統計標題按鈕 & 完整統計彈窗 ===== */
     .stats-btn{
@@ -812,6 +814,11 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 #studentsTab .student-select select{padding:7px 10px;font-size:13px;min-width:220px;border-radius:8px;border:1px solid var(--forest-line);background:#fff;color:var(--forest-deep);font-family:inherit}
 #studentsTab .basic-card{background:var(--forest-card);border:1px solid var(--forest-line);border-radius:10px;padding:16px 18px;box-shadow:0 3px 10px rgba(91,74,55,0.10);margin-bottom:16px}
 #studentsTab #stdBasicInfoForm{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+#studentsTab .basic-card-header{display:flex; align-items:flex-end; gap:10px;}
+#studentsTab .basic-card-header .form-group{margin-bottom:0;}
+#studentsTab #stdBasicInfoToggleBtn{white-space:nowrap; margin-bottom:1px;}
+#studentsTab .basic-info-extra{overflow:hidden; max-height:800px; margin-top:12px; transition:max-height 0.25s ease, opacity 0.2s ease, margin-top 0.25s ease; opacity:1;}
+#studentsTab .basic-info-extra.collapsed{max-height:0; margin-top:0; opacity:0; pointer-events:none;}
 #studentsTab .form-group{display:flex;flex-direction:column}
 #studentsTab .form-group label{margin-bottom:4px;font-weight:700;font-size:11px;color:var(--forest-bark)}
 #studentsTab .form-group input, #studentsTab .form-group textarea{width:100%;padding:6px 8px;border:1px solid var(--forest-line);border-radius:6px;box-sizing:border-box;font-family:inherit;font-size:13px;color:var(--forest-deep);background:#fff}
@@ -1170,17 +1177,22 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         </div>
 
         <div class="basic-card" id="stdBasicInfoCard" style="display:none;">
-            <div id="stdBasicInfoForm">
-                <div class="form-group"><label>姓名</label><input type="text" id="std_info_name" onchange="stdSaveBasicInfo()"></div>
-                <div class="form-group"><label>年齡</label><input type="text" id="std_info_age" onchange="stdSaveBasicInfo()"></div>
-                <div class="form-group"><label>國籍</label><input type="text" id="std_info_nationality" onchange="stdSaveBasicInfo()"></div>
-                <div class="form-group"><label>職業</label><input type="text" id="std_info_occupation" onchange="stdSaveBasicInfo()"></div>
-                <div class="form-group"><label>興趣</label><input type="text" id="std_info_hobby" onchange="stdSaveBasicInfo()"></div>
-                <div class="form-group"><label>念過中文嗎</label><input type="text" id="std_info_studied" onchange="stdSaveBasicInfo()"></div>
-                <div class="form-group"><label>念了多久</label><input type="text" id="std_info_duration" onchange="stdSaveBasicInfo()"></div>
-                <div class="form-group"><label>為什麼想學</label><input type="text" id="std_info_reason" onchange="stdSaveBasicInfo()"></div>
-                <div class="form-group"><label>目標</label><input type="text" id="std_info_goal" onchange="stdSaveBasicInfo()"></div>
-                <div class="form-group full-width"><label>基本狀況</label><textarea id="std_info_status" rows="2" onchange="stdSaveBasicInfo()"></textarea></div>
+            <div class="basic-card-header">
+                <div class="form-group" style="flex:1;"><label>姓名</label><input type="text" id="std_info_name" onchange="stdSaveBasicInfo()"></div>
+                <button type="button" id="stdBasicInfoToggleBtn" onclick="stdToggleBasicInfo()">▸ 展開基本資料</button>
+            </div>
+            <div id="stdBasicInfoExtra" class="basic-info-extra collapsed">
+                <div id="stdBasicInfoForm">
+                    <div class="form-group"><label>年齡</label><input type="text" id="std_info_age" onchange="stdSaveBasicInfo()"></div>
+                    <div class="form-group"><label>國籍</label><input type="text" id="std_info_nationality" onchange="stdSaveBasicInfo()"></div>
+                    <div class="form-group"><label>職業</label><input type="text" id="std_info_occupation" onchange="stdSaveBasicInfo()"></div>
+                    <div class="form-group"><label>興趣</label><input type="text" id="std_info_hobby" onchange="stdSaveBasicInfo()"></div>
+                    <div class="form-group"><label>念過中文嗎</label><input type="text" id="std_info_studied" onchange="stdSaveBasicInfo()"></div>
+                    <div class="form-group"><label>念了多久</label><input type="text" id="std_info_duration" onchange="stdSaveBasicInfo()"></div>
+                    <div class="form-group"><label>為什麼想學</label><input type="text" id="std_info_reason" onchange="stdSaveBasicInfo()"></div>
+                    <div class="form-group"><label>目標</label><input type="text" id="std_info_goal" onchange="stdSaveBasicInfo()"></div>
+                    <div class="form-group full-width"><label>基本狀況</label><textarea id="std_info_status" rows="2" onchange="stdSaveBasicInfo()"></textarea></div>
+                </div>
             </div>
         </div>
 
@@ -2712,17 +2724,16 @@ ${recentTrend.join('\n')}
             summaryMap[rocYear][month] += val;
         });
 
-        let sortedYears = Array.from(yearsSet).sort((a, b) => a - b);
+        let sortedYears = Array.from(yearsSet).sort((a, b) => b - a); // 新到舊，跟其他分頁的年度排序習慣一致
         if (sortedYears.length === 0) {
             const currentRocYear = new Date().getFullYear() - 1911;
-            sortedYears = [currentRocYear - 1, currentRocYear, currentRocYear + 1];
+            sortedYears = [currentRocYear + 1, currentRocYear, currentRocYear - 1];
         }
 
         let totals = {};
         sortedYears.forEach(y => totals[y] = 0);
         let activeMonths = {};
         sortedYears.forEach(y => activeMonths[y] = 0);
-        // 先跑一次算出每年的合計／平均（並排版與堆疊版共用）
         sortedYears.forEach(y => {
             for (let m = 1; m <= 12; m++) {
                 let val = summaryMap[y] && summaryMap[y][m] ? summaryMap[y][m] : 0;
@@ -2731,68 +2742,44 @@ ${recentTrend.join('\n')}
             }
         });
 
-        const isNarrow = window.innerWidth <= 700; // 手機／窄螢幕：改成每年一張表、上下堆疊
-        let html = '';
+        // 並排比較表，外層包一層可以左右滑動的容器、每個年度欄位固定寬度，
+        // 手機上用手指左右滑就能看到其他年度，文字不會被擠壓或切斷。
+        let html = '<div class="summary-scroll-wrap"><table class="summary-table2">';
+        html += '<thead><tr>';
+        sortedYears.forEach(y => {
+            html += `<th class="header-cell" colspan="2">${y}年</th>`;
+        });
+        html += '</tr></thead><tbody>';
 
-        if (isNarrow) {
-            // 由新到舊排列，最新一年放最上面，捲動起來比較順手
-            [...sortedYears].reverse().forEach(y => {
-                const avg = activeMonths[y] > 0 ? Math.round(totals[y] / activeMonths[y]) : 0;
-                html += `<table class="summary-table2 summary-table2-stacked">
-                            <thead><tr><th class="header-cell" colspan="2">${y}年</th></tr></thead>
-                            <tbody>`;
-                for (let m = 12; m >= 1; m--) {
-                    let val = summaryMap[y] && summaryMap[y][m] ? summaryMap[y][m] : 0;
-                    html += `<tr><td class="header-cell">${m}月</td><td class="data-cell">${val > 0 ? Math.round(val) : ''}</td></tr>`;
-                }
-                html += `<tr><td class="total-cell">共計</td><td class="data-cell">${Math.round(totals[y])}</td></tr>
-                          <tr><td class="avg-cell">平均每月</td><td class="data-cell">${avg}</td></tr>`;
-                html += '</tbody></table>';
-            });
-        } else {
-            html += '<table class="summary-table2">';
-            html += '<thead><tr>';
-            sortedYears.forEach(y => {
-                html += `<th class="header-cell" colspan="2">${y}年</th>`;
-            });
-            html += '</tr></thead><tbody>';
-
-            for (let m = 1; m <= 12; m++) {
-                html += '<tr>';
-                sortedYears.forEach(y => {
-                    let val = summaryMap[y] && summaryMap[y][m] ? summaryMap[y][m] : 0;
-                    html += `<td class="header-cell">${y}年${m}月</td>`;
-                    html += `<td class="data-cell">${val > 0 ? Math.round(val) : ''}</td>`;
-                });
-                html += '</tr>';
-            }
-
+        for (let m = 1; m <= 12; m++) {
             html += '<tr>';
             sortedYears.forEach(y => {
-                html += `<td class="total-cell">共計</td>`;
-                html += `<td class="data-cell">${Math.round(totals[y])}</td>`;
+                let val = summaryMap[y] && summaryMap[y][m] ? summaryMap[y][m] : 0;
+                html += `<td class="header-cell">${m}月</td>`;
+                html += `<td class="data-cell">${val > 0 ? Math.round(val) : ''}</td>`;
             });
             html += '</tr>';
-
-            html += '<tr>';
-            sortedYears.forEach(y => {
-                let avg = activeMonths[y] > 0 ? Math.round(totals[y] / activeMonths[y]) : 0;
-                html += `<td class="avg-cell">平均每月</td>`;
-                html += `<td class="data-cell">${avg}</td>`;
-            });
-            html += '</tr>';
-
-            html += '</tbody></table>';
         }
+
+        html += '<tr>';
+        sortedYears.forEach(y => {
+            html += `<td class="total-cell">共計</td>`;
+            html += `<td class="data-cell">${Math.round(totals[y])}</td>`;
+        });
+        html += '</tr>';
+
+        html += '<tr>';
+        sortedYears.forEach(y => {
+            let avg = activeMonths[y] > 0 ? Math.round(totals[y] / activeMonths[y]) : 0;
+            html += `<td class="avg-cell">平均每月</td>`;
+            html += `<td class="data-cell">${avg}</td>`;
+        });
+        html += '</tr>';
+
+        html += '</tbody></table></div>';
 
         target.innerHTML = html;
     }
-    // 螢幕寬度改變時（例如轉螢幕方向）重新渲染，確保並排／堆疊樣式即時切換
-    let summaryResizeTimer = null;
-    window.addEventListener('resize', () => {
-        clearTimeout(summaryResizeTimer);
-        summaryResizeTimer = setTimeout(() => { if (typeof renderSummary === 'function') renderSummary(); }, 250);
-    });
 
     function exportData() {
         const dataStr = JSON.stringify(records, null, 2);
@@ -4108,6 +4095,20 @@ function stdAddNewStudent(){
     stdLoadStudentInfo();
 }
 
+/* 學生基本資料卡片：展開／收合（手機預設收合，只顯示姓名，減少滑動距離） */
+function stdSetBasicInfoCollapsed(collapsed){
+    const extra = document.getElementById('stdBasicInfoExtra');
+    const btn = document.getElementById('stdBasicInfoToggleBtn');
+    if (!extra || !btn) return;
+    extra.classList.toggle('collapsed', collapsed);
+    btn.textContent = collapsed ? '▸ 展開基本資料' : '▾ 收合基本資料';
+}
+function stdToggleBasicInfo(){
+    const extra = document.getElementById('stdBasicInfoExtra');
+    if (!extra) return;
+    stdSetBasicInfoCollapsed(!extra.classList.contains('collapsed'));
+}
+
 function stdLoadStudentInfo(){
     const select = document.getElementById('stdStudentDropdown');
     if(!select) return;
@@ -4139,6 +4140,8 @@ function stdLoadStudentInfo(){
     document.getElementById('std_info_reason').value = s.reason || '';
     document.getElementById('std_info_goal').value = s.goal || '';
     document.getElementById('std_info_status').value = s.status || '';
+
+    stdSetBasicInfoCollapsed(window.innerWidth <= 700); // 手機預設收合、電腦預設展開
 
     stdRenderClasses();
 }
