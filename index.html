@@ -585,7 +585,9 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         border:1px solid var(--forest-line);
         border-radius:6px;
         margin-bottom:26px;
+        outline:none; /* tabindex="-1" 只是不讓它搶走鍵盤焦點，這裡順便把萬一被聚焦時的外框藏掉 */
     }
+    .table-wrap{ outline:none; }
     .record-table{
         width:100%; min-width:1360px; border-collapse:collapse; text-align:center; font-size:12px;
         table-layout:fixed; white-space:nowrap;
@@ -1092,7 +1094,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         每次新增／修改／刪除紀錄後，會自動把每個月「換算台幣」總額同步到生活帳本 moneybook 的「華語文教學」收入（需先在上方登入生活帳本帳號）。
     </div>
 
-    <div class="record-table-wrap" id="recordTableWrap">
+    <div class="record-table-wrap" id="recordTableWrap" tabindex="-1">
         <table class="record-table" id="recordTable">
             <colgroup>
                 <col class="col-date"><col class="col-student"><col class="col-fee">
@@ -1201,7 +1203,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
                 <div class="sec" style="margin:0;border:none;padding:0;">📅 課程紀錄</div>
                 <button onclick="stdAddClassRecord()">+ 新增一堂課</button>
             </div>
-            <div class="table-wrap">
+            <div class="table-wrap" tabindex="-1">
                 <table class="students-table" id="stdClassesTable">
                     <thead>
                         <tr>
@@ -4751,10 +4753,13 @@ function setupGridKeyNav(containerEl, tbodyId) {
                 }
             }
             if (input) {
-                // 加 preventScroll，避免瀏覽器自動把捲動位置搬到目標欄位，
-                // 造成左右跳格時畫面先跳一下捲軸才落到新欄位、體感很跳
+                // 用 preventScroll 先擋掉瀏覽器「聚焦就自動捲動」的預設行為，
+                // 改成我們自己判斷：只有目標欄位真的被擋在可視範圍外時才手動捲，
+                // 這樣一般在畫面內跳格就完全不會有捲動感；真的跳出畫面外才會捲，
+                // 且只捲「剛好看得到」的距離，不會整個跳到最遠端
                 input.focus({ preventScroll: true });
                 if (typeof input.select === 'function') input.select();
+                input.scrollIntoView({ block: 'nearest', inline: 'nearest' });
             }
         }, 0);
     });
