@@ -35,7 +35,7 @@ function tableToAOA(table) {
             if (input) {
                 text = (input.type === 'checkbox') ? (input.checked ? '✓' : '') : (input.value || '');
             } else if (select) {
-                text = select.value || '';
+                text = (select.selectedIndex>=0 && select.options[select.selectedIndex]) ? select.options[select.selectedIndex].textContent : (select.value || '');
             } else {
                 text = cell.textContent.replace(/\s+/g, ' ').trim();
             }
@@ -909,7 +909,11 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
   <span class="diff-badge" id="diff-badge"></span>
 </div>
 
-<div class="sec">📅 課程安排</div>
+<div class="sec">📅 課程安排（包含匯出功能）
+  <div class="sec-actions">
+    <button class="mini-tab-btn" id="freeSlotTabBtn" onclick="toggleFreeSlotSection()">🕓 空檔時間</button>
+  </div>
+</div>
 <div class="dual">
   <div>
     <div class="panel-header tw">台灣時間（GMT+8）</div>
@@ -923,22 +927,24 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 </div>
 <div class="legend" id="legend"></div>
 
-<div class="sec" style="margin-top:22px">
-  🕓 空檔時間
-  <div class="sec-actions">
-    <button class="export-btn" onclick="exportFreeImage('tw')">匯出台灣時間 🖼</button>
-    <button class="export-btn" onclick="exportFreeImage('ot')">匯出對照時區 🖼</button>
+<div id="freeSlotSection" style="display:none;">
+  <div class="sec" style="margin-top:22px">
+    🕓 空檔時間
+    <div class="sec-actions">
+      <button class="export-btn" onclick="exportFreeImage('tw')">匯出台灣時間 🖼</button>
+      <button class="export-btn" onclick="exportFreeImage('ot')">匯出對照時區 🖼</button>
+    </div>
   </div>
-</div>
-<div class="dual">
-  <div>
-    <div class="panel-header free-tw">台灣時間（GMT+8）</div>
-    <div class="tbl-wrap"><table class="sched"><thead id="free-tw-thead"></thead><tbody id="free-tw-tbody"></tbody></table></div>
-  </div>
-  <div class="arrow-col" id="free-arrows"></div>
-  <div>
-    <div class="panel-header free-ot" id="free-other-header">對照時區</div>
-    <div class="tbl-wrap"><table class="sched"><thead id="free-ot-thead"></thead><tbody id="free-ot-tbody"></tbody></table></div>
+  <div class="dual">
+    <div>
+      <div class="panel-header free-tw">台灣時間（GMT+8）</div>
+      <div class="tbl-wrap"><table class="sched"><thead id="free-tw-thead"></thead><tbody id="free-tw-tbody"></tbody></table></div>
+    </div>
+    <div class="arrow-col" id="free-arrows"></div>
+    <div>
+      <div class="panel-header free-ot" id="free-other-header">對照時區</div>
+      <div class="tbl-wrap"><table class="sched"><thead id="free-ot-thead"></thead><tbody id="free-ot-tbody"></tbody></table></div>
+    </div>
   </div>
 </div>
 
@@ -955,6 +961,9 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         <table class="income">
           <thead><tr>
             <th style="width:24px"></th><th>學生</th>
+            <th style="width:110px">國籍</th>
+            <th style="width:130px">台灣時間</th>
+            <th style="width:130px">當地時間</th>
             <th class="num">每堂收費（NT$）</th><th class="num">每週堂數</th>
             <th class="num">每週收入</th><th class="num">每月預估</th>
             <th style="width:60px;text-align:center">不穩定</th>
@@ -3270,36 +3279,47 @@ const MONTHLY_MULT=4;
 
 const TZ_LIST=[
   {name:'── 拉丁美洲 ──',tz:null,disabled:true},
-  {name:'墨西哥 墨西哥城',tz:'America/Mexico_City'},
-  {name:'秘魯 利馬',tz:'America/Lima'},
-  {name:'智利 聖地牙哥',tz:'America/Santiago'},
-  {name:'瓜地馬拉',tz:'America/Guatemala'},
-  {name:'哥斯大黎加',tz:'America/Costa_Rica'},
-  {name:'巴拿馬',tz:'America/Panama'},
-  {name:'古巴 哈瓦那',tz:'America/Havana'},
-  {name:'波多黎各',tz:'America/Puerto_Rico'},
-  {name:'哥倫比亞 波哥大',tz:'America/Bogota'},
-  {name:'厄瓜多 基多',tz:'America/Guayaquil'},
-  {name:'委內瑞拉 卡拉卡斯',tz:'America/Caracas'},
-  {name:'玻利維亞 拉巴斯',tz:'America/La_Paz'},
-  {name:'阿根廷 布宜諾斯艾利斯',tz:'America/Argentina/Buenos_Aires'},
-  {name:'巴西 聖保羅',tz:'America/Sao_Paulo'},
-  {name:'巴西 馬瑙斯',tz:'America/Manaus'},
-  {name:'烏拉圭 蒙特維多',tz:'America/Montevideo'},
-  {name:'巴拉圭 亞松森',tz:'America/Asuncion'},
+  {id:'mx-city',name:'墨西哥 墨西哥城',tz:'America/Mexico_City'},
+  {id:'pe-lima',name:'秘魯 利馬',tz:'America/Lima'},
+  {id:'cl-santiago-dst',name:'智利 聖地牙哥（夏令 9月–4月）',tz:'America/Santiago',dstRef:'2026-01-15',isDST:true},
+  {id:'cl-santiago-std',name:'智利 聖地牙哥（冬令 4月–9月）',tz:'America/Santiago',dstRef:'2026-07-15',isDST:false},
+  {id:'gt',name:'瓜地馬拉',tz:'America/Guatemala'},
+  {id:'cr',name:'哥斯大黎加',tz:'America/Costa_Rica'},
+  {id:'pa',name:'巴拿馬',tz:'America/Panama'},
+  {id:'cu-havana-dst',name:'古巴 哈瓦那（夏令 3月–11月）',tz:'America/Havana',dstRef:'2026-07-15',isDST:true},
+  {id:'cu-havana-std',name:'古巴 哈瓦那（冬令 11月–3月）',tz:'America/Havana',dstRef:'2026-01-15',isDST:false},
+  {id:'pr',name:'波多黎各',tz:'America/Puerto_Rico'},
+  {id:'co',name:'哥倫比亞 波哥大',tz:'America/Bogota'},
+  {id:'ec',name:'厄瓜多 基多',tz:'America/Guayaquil'},
+  {id:'ve',name:'委內瑞拉 卡拉卡斯',tz:'America/Caracas'},
+  {id:'bo',name:'玻利維亞 拉巴斯',tz:'America/La_Paz'},
+  {id:'ar',name:'阿根廷 布宜諾斯艾利斯',tz:'America/Argentina/Buenos_Aires'},
+  {id:'br-sp',name:'巴西 聖保羅',tz:'America/Sao_Paulo'},
+  {id:'br-manaus',name:'巴西 馬瑙斯',tz:'America/Manaus'},
+  {id:'uy',name:'烏拉圭 蒙特維多',tz:'America/Montevideo'},
+  {id:'py',name:'巴拉圭 亞松森',tz:'America/Asuncion'},
   {name:'── 美加 ──',tz:null,disabled:true},
-  {name:'美國 紐約（東部）',tz:'America/New_York'},
-  {name:'美國 芝加哥（中部）',tz:'America/Chicago'},
-  {name:'美國 丹佛（山地）',tz:'America/Denver'},
-  {name:'美國 洛杉磯（西部）',tz:'America/Los_Angeles'},
-  {name:'美國 鳳凰城（山地無夏令）',tz:'America/Phoenix'},
-  {name:'美國 安克拉治（阿拉斯加）',tz:'America/Anchorage'},
-  {name:'美國 檀香山（夏威夷）',tz:'Pacific/Honolulu'},
-  {name:'加拿大 多倫多',tz:'America/Toronto'},
-  {name:'加拿大 溫哥華',tz:'America/Vancouver'},
-  {name:'加拿大 溫尼伯',tz:'America/Winnipeg'},
+  {id:'us-ny-dst',name:'美國 紐約（夏令 3月–11月）',tz:'America/New_York',dstRef:'2026-07-15',isDST:true},
+  {id:'us-ny-std',name:'美國 紐約（冬令 11月–3月）',tz:'America/New_York',dstRef:'2026-01-15',isDST:false},
+  {id:'us-chi-dst',name:'美國 芝加哥（夏令 3月–11月）',tz:'America/Chicago',dstRef:'2026-07-15',isDST:true},
+  {id:'us-chi-std',name:'美國 芝加哥（冬令 11月–3月）',tz:'America/Chicago',dstRef:'2026-01-15',isDST:false},
+  {id:'us-den-dst',name:'美國 丹佛（夏令 3月–11月）',tz:'America/Denver',dstRef:'2026-07-15',isDST:true},
+  {id:'us-den-std',name:'美國 丹佛（冬令 11月–3月）',tz:'America/Denver',dstRef:'2026-01-15',isDST:false},
+  {id:'us-la-dst',name:'美國 洛杉磯（夏令 3月–11月）',tz:'America/Los_Angeles',dstRef:'2026-07-15',isDST:true},
+  {id:'us-la-std',name:'美國 洛杉磯（冬令 11月–3月）',tz:'America/Los_Angeles',dstRef:'2026-01-15',isDST:false},
+  {id:'us-phx',name:'美國 鳳凰城（山地無夏令）',tz:'America/Phoenix'},
+  {id:'us-anc-dst',name:'美國 安克拉治（夏令 3月–11月）',tz:'America/Anchorage',dstRef:'2026-07-15',isDST:true},
+  {id:'us-anc-std',name:'美國 安克拉治（冬令 11月–3月）',tz:'America/Anchorage',dstRef:'2026-01-15',isDST:false},
+  {id:'us-hnl',name:'美國 檀香山（夏威夷無夏令）',tz:'Pacific/Honolulu'},
+  {id:'ca-tor-dst',name:'加拿大 多倫多（夏令 3月–11月）',tz:'America/Toronto',dstRef:'2026-07-15',isDST:true},
+  {id:'ca-tor-std',name:'加拿大 多倫多（冬令 11月–3月）',tz:'America/Toronto',dstRef:'2026-01-15',isDST:false},
+  {id:'ca-van-dst',name:'加拿大 溫哥華（夏令 3月–11月）',tz:'America/Vancouver',dstRef:'2026-07-15',isDST:true},
+  {id:'ca-van-std',name:'加拿大 溫哥華（冬令 11月–3月）',tz:'America/Vancouver',dstRef:'2026-01-15',isDST:false},
+  {id:'ca-wpg-dst',name:'加拿大 溫尼伯（夏令 3月–11月）',tz:'America/Winnipeg',dstRef:'2026-07-15',isDST:true},
+  {id:'ca-wpg-std',name:'加拿大 溫尼伯（冬令 11月–3月）',tz:'America/Winnipeg',dstRef:'2026-01-15',isDST:false},
   {name:'── 歐洲 ──',tz:null,disabled:true},
-  {name:'西班牙 馬德里',tz:'Europe/Madrid'},
+  {id:'es-mad-dst',name:'西班牙 馬德里（夏令 3月–10月）',tz:'Europe/Madrid',dstRef:'2026-07-15',isDST:true},
+  {id:'es-mad-std',name:'西班牙 馬德里（冬令 10月–3月）',tz:'Europe/Madrid',dstRef:'2026-01-15',isDST:false},
 ];
 
 const COLORS={
@@ -3313,12 +3333,14 @@ const COLORS={
 };
 const COLOR_KEYS=Object.keys(COLORS);
 
-let schedule={},rates={},unstable={},retired={},currentTZ=null,diffMin=0,currentCell=null,saveTimer=null;
+let schedule={},rates={},unstable={},retired={},studentInfo={},currentTZ=null,diffMin=0,currentCell=null,saveTimer=null;
 
 // ── 正確的時區偏移計算 ──
-function getUTCOffsetMin(tz){
+// refDate：可傳入指定日期（用來取該日期當下的偏移，讓夏令/冬令選項各自鎖定在正確的季節）；
+// 不傳的話用預設參考日（僅適用於本來就沒有夏令/冬令問題的時區）。
+function getUTCOffsetMin(tz,refDate){
   try{
-    const base=new Date(2026,3,29,12,0,0);
+    const base=refDate||new Date(2026,3,29,12,0,0);
     const utcStr=base.toLocaleString('en-US',{timeZone:'UTC',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
     const tzStr=base.toLocaleString('en-US',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
     const parseLS=s=>{
@@ -3331,15 +3353,34 @@ function getUTCOffsetMin(tz){
   }catch(e){return 0;}
 }
 
-function computeDiff(tz){
-  const TW_OFF=getUTCOffsetMin('Asia/Taipei'); 
-  return getUTCOffsetMin(tz)-TW_OFF;
+// 把 TZ_LIST 裡的 dstRef（'YYYY-MM-DD'）轉成 Date 物件，供 getUTCOffsetMin 使用
+function tzRefDate(entry){
+  if(!entry||!entry.dstRef)return undefined;
+  const[y,m,d]=entry.dstRef.split('-').map(Number);
+  return new Date(y,m-1,d,12,0,0);
+}
+function tzEntryById(id){return TZ_LIST.find(t=>t.id===id);}
+
+function computeDiff(tz,refDate){
+  const TW_OFF=getUTCOffsetMin('Asia/Taipei');
+  return getUTCOffsetMin(tz,refDate)-TW_OFF;
 }
 
-function getTZLabel(tz){
-  const off=getUTCOffsetMin(tz);
+function getTZLabel(tz,refDate){
+  const off=getUTCOffsetMin(tz,refDate);
   const sign=off>=0?'+':'-';const a=Math.abs(off);
   return 'GMT'+sign+Math.floor(a/60)+(a%60?':'+String(a%60).padStart(2,'0'):'');
+}
+
+// 判斷某個時區「現在」實際上是不是處於夏令時間（用今天跟半年後兩個時間點比較，
+// 偏移量比較大的那個就是夏令）；沒有夏令/冬令差異的時區回傳 null。
+function isTZCurrentlyDST(tz){
+  const now=new Date();
+  const future=new Date(now.getFullYear(),now.getMonth()+6,now.getDate(),12,0,0);
+  const offNow=getUTCOffsetMin(tz,now);
+  const offFuture=getUTCOffsetMin(tz,future);
+  if(offNow===offFuture)return null;
+  return offNow>offFuture;
 }
 
 function twToOt(di,h){
@@ -3388,7 +3429,7 @@ function schedSaveData(){
      若用 merge，Firestore 對巢狀物件（例如 unstable、retired）只會做「深層合併」，
      本機刪掉的 key（例如取消勾選「不穩定」、恢復課程）並不會真的從雲端移除，
      下次同步回來又會被還原，造成「勾了就取消不掉」之類的 bug。改成整份覆寫即可。 */
-  window.firebaseSetDoc(ref,{schedule,rates,unstable,retired,updatedAt:Date.now()})
+  window.firebaseSetDoc(ref,{schedule,rates,unstable,retired,studentInfo,updatedAt:Date.now()})
     .then(()=>setSaveStatus('saved'))
     .catch(e=>{console.error(e);setSaveStatus('error');});
 }
@@ -3398,7 +3439,7 @@ function listenCloudData(){
   if(scheduleUnsub){ scheduleUnsub(); scheduleUnsub=null; }
   scheduleUnsub=window.firebaseOnSnapshot(ref,doc=>{
     if(doc.metadata && doc.metadata.hasPendingWrites) return; // 忽略本機寫入回音
-    if(doc.exists()){const d=doc.data();if(d.schedule)schedule=d.schedule;if(d.rates)rates=d.rates;unstable=d.unstable||{};retired=d.retired||{};}
+    if(doc.exists()){const d=doc.data();if(d.schedule)schedule=d.schedule;if(d.rates)rates=d.rates;unstable=d.unstable||{};retired=d.retired||{};studentInfo=d.studentInfo||{};}
     scheduleCloudLoaded=true;
     setSaveStatus('saved');
     renderSched();
@@ -3501,23 +3542,120 @@ function buildOTBusyMap(){
 }
 
 // ── TZ Select ──
+function tzOptionLabel(t){
+  if(t.disabled)return t.name;
+  if(t.isDST==null)return t.name;
+  const nowDST=isTZCurrentlyDST(t.tz);
+  return t.name+((nowDST!==null&&nowDST===t.isDST)?' ✅目前適用':'');
+}
 function buildTZSelect(){
-  const sel=document.getElementById('tz-select');let first=-1;
-  TZ_LIST.forEach((t,i)=>{
-    const o=document.createElement('option');o.value=i;o.textContent=t.name;
-    if(t.disabled)o.disabled=true;else if(first<0)first=i;
+  const sel=document.getElementById('tz-select');let first=-1;let defaultId=null;
+  TZ_LIST.forEach(t=>{
+    const o=document.createElement('option');
+    if(t.disabled){o.disabled=true;o.textContent=t.name;sel.appendChild(o);return;}
+    o.value=t.id;o.textContent=tzOptionLabel(t);
+    if(first<0)first=0;
+    if(defaultId===null){
+      if(t.isDST==null)defaultId=t.id; // 沒有夏令/冬令問題的時區可以先當預設
+      else{
+        const nowDST=isTZCurrentlyDST(t.tz);
+        if(nowDST!==null&&nowDST===t.isDST)defaultId=t.id; // 目前適用的季節優先當預設
+      }
+    }
     sel.appendChild(o);
   });
-  sel.value=first;currentTZ=TZ_LIST[first];
+  if(defaultId===null){const firstReal=TZ_LIST.find(t=>!t.disabled);defaultId=firstReal?firstReal.id:null;}
+  sel.value=defaultId;currentTZ=tzEntryById(defaultId);
 }
 function updateTZ(){
-  const idx=parseInt(document.getElementById('tz-select').value);
-  currentTZ=TZ_LIST[idx];diffMin=computeDiff(currentTZ.tz);
-  const lbl=getTZLabel(currentTZ.tz);
+  const id=document.getElementById('tz-select').value;
+  currentTZ=tzEntryById(id);if(!currentTZ)return;
+  const ref=tzRefDate(currentTZ);
+  diffMin=computeDiff(currentTZ.tz,ref);
+  const lbl=getTZLabel(currentTZ.tz,ref);
   document.getElementById('diff-badge').innerHTML='台灣時間 <b>'+fmtDiff(diffMin)+'</b> = <b>'+currentTZ.name+'</b>';
   document.getElementById('other-header').textContent=currentTZ.name+'（'+lbl+'）';
   document.getElementById('free-other-header').textContent=currentTZ.name+'（'+lbl+'）';
   renderSched();
+}
+
+// ── 學生國籍／台灣時間／當地時間（學生收費設定表用） ──
+function natSelectOptions(selectedId){
+  let html='<option value=""'+(!selectedId?' selected':'')+'>未設定</option>';
+  TZ_LIST.forEach(t=>{
+    if(t.disabled){html+=`<option disabled>${t.name}</option>`;return;}
+    html+=`<option value="${t.id}"${t.id===selectedId?' selected':''}>${tzOptionLabel(t)}</option>`;
+  });
+  return html;
+}
+// 依課表自動取得該學生每個時段的「週幾 時間」，例如「二 14:00–15:00、四 14:00–15:00」
+function autoTWTimeText(name){
+  const slots=Object.entries(schedule)
+    .filter(([k,e])=>e&&e.name===name)
+    .map(([k])=>{const[h,di]=k.split('_').map(Number);return{h,di};})
+    .sort((a,b)=>a.di-b.di||a.h-b.h);
+  if(slots.length===0)return'';
+  return slots.map(s=>DAYS[s.di]+' '+fmtRangeTW(s.h)).join('、');
+}
+// 解析使用者輸入／自動帶入的「台灣時間」文字，支援用「、」「,」換行分隔多筆，
+// 每筆格式「週幾 HH:MM–HH:MM」（週幾可省略，省略時依序對應課表原本的時段）
+function parseTWTimeText(text,name){
+  if(!text)return[];
+  const fallback=Object.entries(schedule)
+    .filter(([k,e])=>e&&e.name===name)
+    .map(([k])=>{const[h,di]=k.split('_').map(Number);return{h,di};})
+    .sort((a,b)=>a.di-b.di||a.h-b.h);
+  const parts=text.split(/[、,\n]+/).map(s=>s.trim()).filter(Boolean);
+  const out=[];
+  parts.forEach((p,i)=>{
+    const m=p.match(/([一二三四五六日])?\s*(\d{1,2}):(\d{2})\s*[–-]\s*(\d{1,2}):(\d{2})/);
+    if(!m)return;
+    const di=m[1]?DAYS.indexOf(m[1]):(fallback[i]?fallback[i].di:0);
+    if(di<0)return;
+    out.push({di,h:+m[2],mn:+m[3],eh:+m[4],emn:+m[5]});
+  });
+  return out;
+}
+// 將台灣時段換算成指定時區（TZ_LIST 的 id，本身已鎖定夏令/冬令）的當地時間文字，
+// 換日規則與課表對照時區一致
+function localizeTWSlots(slots,natId){
+  const entry=tzEntryById(natId);
+  if(!entry||slots.length===0)return'';
+  const diff=computeDiff(entry.tz,tzRefDate(entry));
+  const WEEK=7*1440;const norm=t=>((t%WEEK)+WEEK)%WEEK;
+  return slots.map(s=>{
+    const startTotal=s.di*1440+s.h*60+s.mn;
+    let endTotal=s.di*1440+s.eh*60+s.emn;
+    if(endTotal<=startTotal)endTotal+=1440; // 跨半夜的課
+    const ls=norm(startTotal+diff),le=norm(endTotal+diff);
+    const startDi=Math.floor(ls/1440),endDi=Math.floor(le/1440);
+    const startStr=DAYS[startDi]+' '+fmtHM(ls%1440);
+    const endStr=(endDi===startDi)?fmtHM(le%1440):(DAYS[endDi]+' '+fmtHM(le%1440));
+    return startStr+'–'+endStr;
+  }).join('、');
+}
+function getStudentTWTimeText(name){
+  const info=studentInfo[name];
+  return(info&&info.twOverride)?info.twOverride:autoTWTimeText(name);
+}
+function getStudentLocalTimeText(name){
+  const info=studentInfo[name];
+  if(!info||!info.nat)return'';
+  const slots=parseTWTimeText(getStudentTWTimeText(name),name);
+  return localizeTWSlots(slots,info.nat);
+}
+function updateStudentNat(name,natId){
+  studentInfo[name]=studentInfo[name]||{};
+  studentInfo[name].nat=natId||'';
+  renderIncomeTable();scheduleSave();
+}
+function updateStudentTWOverride(name,val){
+  studentInfo[name]=studentInfo[name]||{};
+  const auto=autoTWTimeText(name);
+  if(val.trim()===''||val.trim()===auto)delete studentInfo[name].twOverride;
+  else studentInfo[name].twOverride=val.trim();
+  if(Object.keys(studentInfo[name]).length===0)delete studentInfo[name];
+  renderIncomeTable();scheduleSave();
 }
 
 // ── 標頭（固定週一到週日） ──
@@ -3657,14 +3795,21 @@ function renderIncomeTable(){
   Object.keys(rates).forEach(n=>{if(!students[n]&&!retired[n])delete rates[n];});
   Object.keys(students).forEach(n=>{if(rates[n]==null)rates[n]=0;});
   Object.keys(unstable).forEach(n=>{if(!students[n])delete unstable[n];});
+  Object.keys(studentInfo).forEach(n=>{if(!students[n]&&!retired[n])delete studentInfo[n];});
   const tbody=document.getElementById('rate-body');const tfoot=document.getElementById('rate-foot');
   tbody.innerHTML='';let weeklyTotal=0;
   Object.entries(students).forEach(([name,color])=>{
     const c=COLORS[color]||COLORS.forest;const cnt=sessionCount(name);const rate=rates[name]||0;
     const weekly=cnt*rate;const monthly=weekly*MONTHLY_MULT;weeklyTotal+=weekly;
+    const info=studentInfo[name]||{};
+    const twText=getStudentTWTimeText(name);
+    const localText=getStudentLocalTimeText(name);
     const tr=document.createElement('tr');
     tr.innerHTML=`<td><span class="sdot" style="background:${c.bg};border:1px solid ${c.text}40"></span></td>
       <td>${name}</td>
+      <td><select class="nat-select" data-name="${name}">${natSelectOptions(info.nat)}</select></td>
+      <td><input class="tw-time-input" type="text" data-name="${name}" value="${twText.replace(/"/g,'&quot;')}" placeholder="例：二 14:00–15:00"/></td>
+      <td class="local-time-cell" style="color:var(--forest-bark)">${localText||(info.nat?'（無法解析時間）':'（請先選國籍）')}</td>
       <td class="num"><input class="rate-input" type="number" min="0" step="100" value="${rate}" data-name="${name}"/></td>
       <td class="num">${cnt}</td>
       <td class="num">${weekly>0?'NT$ '+weekly.toLocaleString():'—'}</td>
@@ -3675,7 +3820,7 @@ function renderIncomeTable(){
   });
   const totalSessions=Object.keys(students).reduce((a,n)=>a+sessionCount(n),0);
   const monthlyTotal=weeklyTotal*MONTHLY_MULT;
-  tfoot.innerHTML=`<tr><td></td><td style="font-weight:700">合計</td><td></td>
+  tfoot.innerHTML=`<tr><td></td><td style="font-weight:700">合計</td><td></td><td></td><td></td>
     <td class="num" style="font-weight:700">${totalSessions}</td>
     <td class="num" style="font-weight:700">${weeklyTotal>0?'NT$ '+weeklyTotal.toLocaleString():'—'}</td>
     <td class="num" style="font-weight:700">${monthlyTotal>0?'NT$ '+monthlyTotal.toLocaleString():'—'}</td>
@@ -3687,9 +3832,25 @@ function renderIncomeTable(){
   document.querySelectorAll('.unstable-checkbox').forEach(cb=>{
     cb.onchange=()=>{toggleUnstable(cb.dataset.name,cb.checked);};
   });
+  document.querySelectorAll('.nat-select').forEach(sel=>{
+    sel.onchange=()=>{updateStudentNat(sel.dataset.name,sel.value);};
+  });
+  document.querySelectorAll('.tw-time-input').forEach(inp=>{
+    inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();inp.blur();}};
+    inp.onblur=()=>{updateStudentTWOverride(inp.dataset.name,inp.value);};
+  });
   renderRetiredTable();
   // 同步到「每日上課收入」分頁的學生收費表（只在雲端課表已載入過至少一次後才同步，避免用空資料誤蓋原本資料）
   if(scheduleCloudLoaded && typeof syncStudentsFromSchedule==='function') syncStudentsFromSchedule();
+}
+
+/* ── 🕓 空檔時間：改為點擊展開的分頁按鈕，預設收起 ── */
+function toggleFreeSlotSection(){
+  const sec=document.getElementById('freeSlotSection');const btn=document.getElementById('freeSlotTabBtn');
+  if(!sec||!btn)return;
+  const showing=sec.style.display!=='none';
+  sec.style.display=showing?'none':'';
+  btn.classList.toggle('active',!showing);
 }
 
 /* ── 🍃 無緣的學生：左欄第二個分頁 ── */
@@ -3905,7 +4066,7 @@ function exportScheduleExcel(){
 
 // ── 匯出圖片 ──
 function exportFreeImage(side){
-  const isTW=(side==='tw');const lbl=isTW?'GMT+8':getTZLabel(currentTZ.tz);
+  const isTW=(side==='tw');const lbl=isTW?'GMT+8':getTZLabel(currentTZ.tz,tzRefDate(currentTZ));
   const title=isTW?'空檔時間（台灣時間 GMT+8）':'空檔時間（'+currentTZ.name+' '+lbl+'）';
   const filename=isTW?'libre_taiwan.png':'libre_'+currentTZ.name.replace(/[^a-zA-Z0-9]/g,'_')+'.png';
   const busyMap=buildOTBusyMap();
