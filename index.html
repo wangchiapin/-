@@ -738,13 +738,16 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 #scheduleTab .leg-item{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--forest-bark)}
 #scheduleTab .leg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
 #scheduleTab table.income{width:100%;border-collapse:collapse;font-size:12px;background:var(--forest-card)}
-#scheduleTab table.income th{font-size:11px;font-weight:700;color:#fff;padding:6px 8px;border:1px solid var(--forest-bark);background:var(--forest-mid);text-align:left}
-#scheduleTab table.income th.num{text-align:right}
-#scheduleTab table.income td{border:1px solid var(--forest-line);padding:5px 8px;vertical-align:middle;color:var(--forest-deep)}
-#scheduleTab table.income td.num{text-align:right;font-variant-numeric:tabular-nums}
+#scheduleTab table.income th{font-size:11px;font-weight:700;color:#fff;padding:6px 8px;border:1px solid var(--forest-bark);background:var(--forest-mid);text-align:center;vertical-align:middle}
+#scheduleTab table.income th.num{text-align:center}
+#scheduleTab table.income td{border:1px solid var(--forest-line);padding:5px 8px;vertical-align:middle;color:var(--forest-deep);text-align:center}
+#scheduleTab table.income td.num{text-align:center;font-variant-numeric:tabular-nums}
 #scheduleTab table.income tr:hover td{background:var(--forest-pale)}
 #scheduleTab table.income tfoot td{font-weight:700;background:var(--forest-gold-pale)}
-#scheduleTab .rate-input{font-size:12px;padding:5px 7px;border-radius:6px;border:1px solid var(--forest-line);background:#fff;color:var(--forest-deep);width:90px;text-align:right;font-family:inherit}
+#scheduleTab .rate-input{font-size:12px;padding:5px 7px;border-radius:6px;border:1px solid var(--forest-line);background:#fff;color:var(--forest-deep);width:90px;text-align:center;font-family:inherit}
+#scheduleTab .nat-select{font-size:12px;padding:5px 6px;border-radius:6px;border:1px solid var(--forest-line);background:#fff;color:var(--forest-deep);width:100%;text-align:center;text-align-last:center;font-family:inherit}
+#scheduleTab .tw-time-input{font-size:12px;padding:5px 7px;border-radius:6px;border:1px solid var(--forest-line);background:#fff;color:var(--forest-deep);width:100%;text-align:center;font-family:inherit}
+#scheduleTab .local-time-cell{text-align:center}
 #scheduleTab .rate-input:focus{outline:none;border-color:var(--forest-mid);box-shadow:0 0 0 2px rgba(63,107,74,0.15)}
 #scheduleTab .sdot{width:10px;height:10px;border-radius:3px;display:inline-block}
 #scheduleTab .cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:8px}
@@ -942,13 +945,13 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         <table class="income">
           <thead><tr>
             <th style="width:24px"></th><th>學生</th>
-            <th style="width:110px">國籍</th>
-            <th style="width:130px">台灣時間</th>
-            <th style="width:130px">當地時間</th>
-            <th class="num">每堂收費（NT$）</th><th class="num">每週堂數</th>
+            <th style="width:105px">國籍</th>
+            <th style="width:200px">台灣時間</th>
+            <th style="width:200px">當地時間</th>
+            <th class="num" style="width:80px">每堂收費（NT$）</th><th class="num" style="width:60px">每週堂數</th>
             <th class="num">每週收入</th><th class="num">每月預估</th>
-            <th style="width:60px;text-align:center">不穩定</th>
-            <th style="width:50px;text-align:center">刪除</th>
+            <th style="width:60px">不穩定</th>
+            <th style="width:50px">刪除</th>
           </tr></thead>
           <tbody id="rate-body"></tbody>
           <tfoot id="rate-foot"></tfoot>
@@ -3462,6 +3465,8 @@ function fmtHM(totalMin){const m=((totalMin%1440)+1440)%1440;return String(Math.
 function fmtRangeTW(h){return fmtHM(h*60)+'–'+fmtHM(h*60+60);}
 function fmtRangeOT(h){return fmtHM(h*60)+'–'+fmtHM(h*60+60);}
 function fmtDiff(d){const s=d>=0?'+':'-';const a=Math.abs(d);return s+Math.floor(a/60)+(a%60?':'+String(a%60).padStart(2,'0'):'')+'h';}
+// 精簡格式（無冒號），用於「學生收費設定」表的台灣時間／當地時間欄位，例如 "三 1000-1100"
+function fmtHMCompact(totalMin){const m=((totalMin%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+String(m%60).padStart(2,'0');}
 function cellKey(h,di){return h+'_'+di;}
 function isBusy(h,di){const e=schedule[cellKey(h,di)];return !!(e&&e.name);}
 
@@ -3592,17 +3597,17 @@ function natSelectOptions(selectedId){
   });
   return html;
 }
-// 依課表自動取得該學生每個時段的「週幾 時間」，例如「二 14:00–15:00、四 14:00–15:00」
+// 依課表自動取得該學生每個時段的「週幾 時間」，例如「三 1000-1100、四 1000-1100」
 function autoTWTimeText(name){
   const slots=Object.entries(schedule)
     .filter(([k,e])=>e&&e.name===name)
     .map(([k])=>{const[h,di]=k.split('_').map(Number);return{h,di};})
     .sort((a,b)=>a.di-b.di||a.h-b.h);
   if(slots.length===0)return'';
-  return slots.map(s=>DAYS[s.di]+' '+fmtRangeTW(s.h)).join('、');
+  return slots.map(s=>DAYS[s.di]+' '+fmtHMCompact(s.h*60)+'-'+fmtHMCompact(s.h*60+60)).join('、');
 }
 // 解析使用者輸入／自動帶入的「台灣時間」文字，支援用「、」「,」換行分隔多筆，
-// 每筆格式「週幾 HH:MM–HH:MM」（週幾可省略，省略時依序對應課表原本的時段）
+// 每筆格式「週幾 HHMM-HHMM」（週幾可省略，省略時依序對應課表原本的時段；也相容舊的 HH:MM–HH:MM 格式）
 function parseTWTimeText(text,name){
   if(!text)return[];
   const fallback=Object.entries(schedule)
@@ -3612,7 +3617,7 @@ function parseTWTimeText(text,name){
   const parts=text.split(/[、,\n]+/).map(s=>s.trim()).filter(Boolean);
   const out=[];
   parts.forEach((p,i)=>{
-    const m=p.match(/([一二三四五六日])?\s*(\d{1,2}):(\d{2})\s*[–-]\s*(\d{1,2}):(\d{2})/);
+    const m=p.match(/([一二三四五六日])?\s*(\d{1,2}):?(\d{2})\s*[–-]\s*(\d{1,2}):?(\d{2})/);
     if(!m)return;
     const di=m[1]?DAYS.indexOf(m[1]):(fallback[i]?fallback[i].di:0);
     if(di<0)return;
@@ -3621,7 +3626,7 @@ function parseTWTimeText(text,name){
   return out;
 }
 // 將台灣時段換算成指定時區（TZ_LIST 的 id，本身已鎖定夏令/冬令）的當地時間文字，
-// 換日規則與課表對照時區一致
+// 換日規則與課表對照時區一致，格式與台灣時間欄位相同（例如「三 0900-1000」）
 function localizeTWSlots(slots,natId){
   const entry=tzEntryById(natId);
   if(!entry||slots.length===0)return'';
@@ -3633,9 +3638,9 @@ function localizeTWSlots(slots,natId){
     if(endTotal<=startTotal)endTotal+=1440; // 跨半夜的課
     const ls=norm(startTotal+diff),le=norm(endTotal+diff);
     const startDi=Math.floor(ls/1440),endDi=Math.floor(le/1440);
-    const startStr=DAYS[startDi]+' '+fmtHM(ls%1440);
-    const endStr=(endDi===startDi)?fmtHM(le%1440):(DAYS[endDi]+' '+fmtHM(le%1440));
-    return startStr+'–'+endStr;
+    const startStr=DAYS[startDi]+' '+fmtHMCompact(ls%1440);
+    const endStr=(endDi===startDi)?fmtHMCompact(le%1440):(DAYS[endDi]+' '+fmtHMCompact(le%1440));
+    return startStr+'-'+endStr;
   }).join('、');
 }
 function getStudentTWTimeText(name){
@@ -3812,7 +3817,7 @@ function renderIncomeTable(){
     tr.innerHTML=`<td><span class="sdot" style="background:${c.bg};border:1px solid ${c.text}40"></span></td>
       <td>${name}</td>
       <td><select class="nat-select" data-name="${name}">${natSelectOptions(info.nat)}</select></td>
-      <td><input class="tw-time-input" type="text" data-name="${name}" value="${twText.replace(/"/g,'&quot;')}" placeholder="例：二 14:00–15:00"/></td>
+      <td><input class="tw-time-input" type="text" data-name="${name}" value="${twText.replace(/"/g,'&quot;')}" placeholder="例：二 1400-1500"/></td>
       <td class="local-time-cell" style="color:var(--forest-bark)">${localText||(info.nat?'（無法解析時間）':'（請先選國籍）')}</td>
       <td class="num"><input class="rate-input" type="number" min="0" step="100" value="${rate}" data-name="${name}"/></td>
       <td class="num">${cnt}</td>
