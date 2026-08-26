@@ -748,11 +748,11 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 #scheduleTab .rate-input:focus{outline:none;border-color:var(--forest-mid);box-shadow:0 0 0 2px rgba(63,107,74,0.15)}
 #scheduleTab .sdot{width:10px;height:10px;border-radius:3px;display:inline-block}
 #scheduleTab .cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:8px}
-/* ===== 學生收費設定（左欄）／收入相關數據（右欄）===== */
-#scheduleTab .fee-income-wrapper{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
-#scheduleTab .fee-col{flex:1 1 420px;min-width:320px}
-#scheduleTab .income-col{flex:1 1 420px;min-width:320px}
-#scheduleTab .income-col .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+/* ===== 學生收費設定（上）／收入相關數據（下），皆為全寬 ===== */
+#scheduleTab .fee-income-wrapper{display:flex;flex-direction:column;gap:28px}
+#scheduleTab .fee-col{width:100%}
+#scheduleTab .income-col{width:100%}
+#scheduleTab .income-col .cards{grid-template-columns:repeat(5,minmax(0,1fr))}
 #scheduleTab .mini-tab-nav{display:flex;gap:6px;margin-bottom:10px}
 #scheduleTab .mini-tab-btn{font-family:'Noto Sans TC',sans-serif;font-size:12px;font-weight:700;padding:6px 14px;border-radius:16px;border:1px solid var(--forest-line);background:var(--forest-card);color:var(--forest-mid);cursor:pointer;transition:0.2s}
 #scheduleTab .mini-tab-btn:hover{background:var(--forest-pale)}
@@ -909,11 +909,13 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
   <span class="diff-badge" id="diff-badge"></span>
 </div>
 
-<div class="sec">📅 課程安排（包含匯出功能）
-  <div class="sec-actions">
-    <button class="mini-tab-btn" id="freeSlotTabBtn" onclick="toggleFreeSlotSection()">🕓 空檔時間</button>
-  </div>
+<div class="mini-tab-nav" id="schedSubTabNav">
+  <button class="mini-tab-btn active" id="schedMainTabBtn" onclick="switchSchedSubTab('main')">📅 課程安排</button>
+  <button class="mini-tab-btn" id="schedFreeTabBtn" onclick="switchSchedSubTab('free')">🕓 空檔時間</button>
 </div>
+
+<div id="schedMainView">
+<div class="sec">📅 課程安排（包含匯出功能）</div>
 <div class="dual">
   <div>
     <div class="panel-header tw">台灣時間（GMT+8）</div>
@@ -927,30 +929,9 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 </div>
 <div class="legend" id="legend"></div>
 
-<div id="freeSlotSection" style="display:none;">
-  <div class="sec" style="margin-top:22px">
-    🕓 空檔時間
-    <div class="sec-actions">
-      <button class="export-btn" onclick="exportFreeImage('tw')">匯出台灣時間 🖼</button>
-      <button class="export-btn" onclick="exportFreeImage('ot')">匯出對照時區 🖼</button>
-    </div>
-  </div>
-  <div class="dual">
-    <div>
-      <div class="panel-header free-tw">台灣時間（GMT+8）</div>
-      <div class="tbl-wrap"><table class="sched"><thead id="free-tw-thead"></thead><tbody id="free-tw-tbody"></tbody></table></div>
-    </div>
-    <div class="arrow-col" id="free-arrows"></div>
-    <div>
-      <div class="panel-header free-ot" id="free-other-header">對照時區</div>
-      <div class="tbl-wrap"><table class="sched"><thead id="free-ot-thead"></thead><tbody id="free-ot-tbody"></tbody></table></div>
-    </div>
-  </div>
-</div>
-
 <div class="sec" style="margin-top:22px">💰 學生收費設定與收入數據</div>
 <div class="fee-income-wrapper">
-  <!-- 左欄：學生收費設定／無緣的學生 -->
+  <!-- 學生收費設定／無緣的學生 -->
   <div class="fee-col">
     <div class="mini-tab-nav" id="feeSubTabNav">
       <button class="mini-tab-btn active" data-subtab="active" onclick="switchFeeSubTab('active')">💰 學生收費設定</button>
@@ -992,7 +973,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
     </div>
   </div>
 
-  <!-- 右欄：每日收入／收入總覽 -->
+  <!-- 每日收入／收入總覽（現在放在學生收費設定下方，全寬顯示） -->
   <div class="income-col">
     <div class="sec" style="margin-top:0">📆 每日收入</div>
     <div class="day-grid" id="day-grid"></div>
@@ -1010,6 +991,29 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
     </div>
   </div>
 </div>
+</div>
+
+<div id="schedFreeView" style="display:none;">
+  <div class="sec" style="margin-top:0">
+    🕓 空檔時間
+    <div class="sec-actions">
+      <button class="export-btn" onclick="exportFreeImage('tw')">匯出台灣時間 🖼</button>
+      <button class="export-btn" onclick="exportFreeImage('ot')">匯出對照時區 🖼</button>
+    </div>
+  </div>
+  <div class="dual">
+    <div>
+      <div class="panel-header free-tw">台灣時間（GMT+8）</div>
+      <div class="tbl-wrap"><table class="sched"><thead id="free-tw-thead"></thead><tbody id="free-tw-tbody"></tbody></table></div>
+    </div>
+    <div class="arrow-col" id="free-arrows"></div>
+    <div>
+      <div class="panel-header free-ot" id="free-other-header">對照時區</div>
+      <div class="tbl-wrap"><table class="sched"><thead id="free-ot-thead"></thead><tbody id="free-ot-tbody"></tbody></table></div>
+    </div>
+  </div>
+</div>
+
 <div id="modal-mount"></div>
 
     </div>
@@ -3844,13 +3848,18 @@ function renderIncomeTable(){
   if(scheduleCloudLoaded && typeof syncStudentsFromSchedule==='function') syncStudentsFromSchedule();
 }
 
-/* ── 🕓 空檔時間：改為點擊展開的分頁按鈕，預設收起 ── */
-function toggleFreeSlotSection(){
-  const sec=document.getElementById('freeSlotSection');const btn=document.getElementById('freeSlotTabBtn');
-  if(!sec||!btn)return;
-  const showing=sec.style.display!=='none';
-  sec.style.display=showing?'none':'';
-  btn.classList.toggle('active',!showing);
+/* ── 「課程安排」／「空檔時間」：改為真正的分頁切換，主頁不再顯示空檔時間 ── */
+function switchSchedSubTab(tab){
+  const main=document.getElementById('schedMainView');
+  const free=document.getElementById('schedFreeView');
+  const mainBtn=document.getElementById('schedMainTabBtn');
+  const freeBtn=document.getElementById('schedFreeTabBtn');
+  if(!main||!free||!mainBtn||!freeBtn)return;
+  const showFree=(tab==='free');
+  main.style.display=showFree?'none':'';
+  free.style.display=showFree?'':'none';
+  mainBtn.classList.toggle('active',!showFree);
+  freeBtn.classList.toggle('active',showFree);
 }
 
 /* ── 🍃 無緣的學生：左欄第二個分頁 ── */
