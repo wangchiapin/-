@@ -817,6 +817,11 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 #studentsTab .view-toggle{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
 #studentsTab .student-select{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
 #studentsTab .student-select select{padding:7px 10px;font-size:13px;min-width:220px;border-radius:8px;border:1px solid var(--forest-line);background:#fff;color:var(--forest-deep);font-family:inherit}
+#studentsTab .student-tabs{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0}
+#studentsTab .student-tab{padding:6px 12px;font-size:13px;border-radius:8px 8px 0 0;border:1px solid var(--forest-line);border-bottom-width:3px;background:var(--forest-gold-pale);color:var(--forest-deep);font-family:inherit;cursor:pointer;transition:background .15s ease,border-color .15s ease}
+#studentsTab .student-tab:hover{background:#fff}
+#studentsTab .student-tab.active{background:var(--forest-mid);border-color:var(--forest-mid);color:#fff;font-weight:700}
+#studentsTab .student-tabs-empty{font-size:12px;color:var(--forest-bark);opacity:.75}
 #studentsTab .basic-card{background:var(--forest-card);border:1px solid var(--forest-line);border-radius:10px;padding:16px 18px;box-shadow:0 3px 10px rgba(91,74,55,0.10);margin-bottom:16px}
 #studentsTab #stdBasicInfoForm{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
 #studentsTab .basic-card-header{display:flex; align-items:flex-end; gap:10px;}
@@ -1075,7 +1080,8 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
             <div class="calendar-toolbar">
                 <button class="btn-today" onclick="goToCurrentMonth()">🏠 回本月</button>
                 <button class="btn-cal-import" onclick="document.getElementById('calendarImportInput').click()">📥 匯入每日紀錄</button>
-                <button class="btn-cal-import" onclick="exportCalendarExcel()">📤 匯出 Excel</button>
+                <button class="btn-cal-import" onclick="exportCalendarExcel()">📤 匯出 Excel（本月）</button>
+                <button class="btn-cal-import" onclick="exportCalendarExcelAllMonths()">📤 匯出 Excel（全部月份）</button>
                 <input type="file" id="calendarImportInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importCalendarIncome(event)">
             </div>
             <div id="calendar-area"></div>
@@ -1105,6 +1111,11 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
     <button class="btn" onclick="exportData()" style="float:right; margin-right:8px;">匯出資料(JSON)</button>
     <button class="btn" onclick="document.getElementById('excelImportInput').click()" style="float:right; margin-right:8px; background:var(--forest-gold-pale);">📥 匯入 Excel</button>
     <input type="file" id="excelImportInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importExcel(event)">
+    <div style="clear:both; display:flex; align-items:center; gap:6px; font-size:12px; color:var(--forest-bark); margin:4px 0 10px;">
+        <label for="usdRateInput" style="font-weight:600;">美金匯率：</label>
+        <input type="text" inputmode="decimal" id="usdRateInput" value="29" style="width:64px; padding:2px 6px; border:1px solid var(--forest-line, #ccc); border-radius:4px;" onchange="updateUsdRate(this.value)">
+        <span style="opacity:.7;">（預設 29，套用於「每堂收費」為美金的紀錄，可自行修改）</span>
+    </div>
     <div style="clear:both; font-size:11px; color:var(--forest-bark); margin:-4px 0 10px;">
         支援 .xlsx / .xls / .csv，會自動辨識「收款日、學生、每堂收費、匯入金額、實收金額、匯率、台幣、換算台幣、購買堂數、匯款方式、備考」等欄位標題並附加到下方紀錄後面<br>
         每次新增／修改／刪除紀錄後，會自動把每個月「換算台幣」總額同步到生活帳本 moneybook 的「華語文教學」收入（需先在上方登入生活帳本帳號）。
@@ -1182,14 +1193,12 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         <div class="view-toggle">
             <button id="stdBtnViewActive" class="primary" onclick="stdToggleView('active')">📖 在學學生</button>
             <button id="stdBtnViewArchived" onclick="stdToggleView('archived')">🗄️ 無緣的學生</button>
+            <button id="stdBtnAddStudent" onclick="stdAddNewStudent()">+ 新增學生</button>
+            <button id="stdBtnArchiveStudent" class="danger" onclick="stdArchiveCurrentStudent()">刪除學生 (移至無緣)</button>
         </div>
 
         <div class="student-select">
-            <select id="stdStudentDropdown" onchange="stdLoadStudentInfo()">
-                <option value="">-- 選擇學生 --</option>
-            </select>
-            <button id="stdBtnAddStudent" onclick="stdAddNewStudent()">+ 新增學生</button>
-            <button id="stdBtnArchiveStudent" class="danger" onclick="stdArchiveCurrentStudent()">刪除學生 (移至無緣)</button>
+            <div class="student-tabs" id="stdStudentTabs"></div>
             <button id="stdBtnRestoreStudent" onclick="stdRestoreCurrentStudent()" style="display:none;">恢復此學生</button>
             <button id="stdBtnPermDeleteStudent" class="danger" onclick="stdPermDeleteCurrentStudent()" style="display:none;">永久刪除</button>
         </div>
@@ -1209,10 +1218,11 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
                     <div class="form-group"><label>念了多久</label><input type="text" id="std_info_duration" onchange="stdSaveBasicInfo()"></div>
                     <div class="form-group"><label>為什麼想學</label><input type="text" id="std_info_reason" onchange="stdSaveBasicInfo()"></div>
                     <div class="form-group"><label>目標</label><input type="text" id="std_info_goal" onchange="stdSaveBasicInfo()"></div>
-                    <div class="form-group full-width"><label>基本狀況</label><textarea id="std_info_status" rows="2" onchange="stdSaveBasicInfo()"></textarea></div>
                 </div>
             </div>
+            <div class="form-group full-width" style="margin-top:12px;"><label>基本狀況</label><textarea id="std_info_status" rows="2" onchange="stdSaveBasicInfo()"></textarea></div>
         </div>
+
 
         <div class="class-record-card" id="stdClassRecordCard" style="display:none;">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
@@ -2273,6 +2283,84 @@ ${recentTrend.join('\n')}
         downloadWorkbook(sheets, `每日上課收入_${currentYear}-${String(currentMonth + 1).padStart(2, '0')}.xlsx`);
     }
 
+    /* 依資料（incomeData）直接算出指定年月（西元年、month 為 0-11）的日曆格式 AOA，
+       不依賴目前畫面上顯示的月份，讓「匯出全部月份」可以涵蓋任何有資料的月份 */
+    function buildCalendarAOAForMonth(year, month) {
+        const aoa = [];
+        aoa.push(['一', '二', '三', '四', '五', '六', '日', '週結']);
+
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        let startDayOfWeek = firstDay.getDay() || 7;
+        let currentDay = 1;
+        let isFirstWeek = true;
+        let monthlyTotal = 0, monthlyClasses = 0;
+
+        while (currentDay <= lastDay.getDate()) {
+            const dateRow = [];
+            const incomeRows = [[], [], [], [], [], []];
+            let weekTotal = 0;
+            let weekHasValue = false;
+
+            for (let i = 1; i <= 7; i++) {
+                if ((isFirstWeek && i < startDayOfWeek) || currentDay > lastDay.getDate()) {
+                    dateRow.push('');
+                    for (let s = 0; s < 6; s++) incomeRows[s].push('');
+                } else {
+                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
+                    dateRow.push(`${month + 1}/${currentDay}`);
+                    const values = incomeData[dateStr] || ['', '', '', '', '', ''];
+                    for (let s = 0; s < 6; s++) {
+                        const raw = values[s] || '';
+                        incomeRows[s].push(raw);
+                        const num = parseFloat(raw);
+                        if (!isNaN(num) && String(raw).trim() !== '') {
+                            weekTotal += num;
+                            weekHasValue = true;
+                            monthlyTotal += num;
+                            monthlyClasses += 1;
+                        }
+                    }
+                    currentDay++;
+                }
+            }
+            aoa.push(dateRow.concat(['']));
+            incomeRows.forEach((r, i) => aoa.push(r.concat([i === 0 ? (weekHasValue ? weekTotal : '') : ''])));
+            isFirstWeek = false;
+        }
+
+        aoa.push([]);
+        aoa.push(['本月總計', monthlyTotal, '節數', monthlyClasses, '平均', monthlyClasses > 0 ? Math.round(monthlyTotal / monthlyClasses) : '']);
+        return aoa;
+    }
+
+    /* 匯出「每日上課收入」全部月份：先一張「每月總覽」，再依序每個有資料的月份各一張日曆明細表 */
+    function exportCalendarExcelAllMonths() {
+        const { summary } = buildMonthlySummaryData();
+        const sheets = [];
+
+        const overviewAoa = [['年度(民國)', '月份', '金額', '節數', '平均']];
+        const yearMonthList = [];
+        Object.keys(summary).map(Number).sort((a, b) => a - b).forEach(y => {
+            for (let m = 1; m <= 12; m++) {
+                if (summary[y] && summary[y][m]) {
+                    const d = summary[y][m];
+                    overviewAoa.push([y, m, d.total, d.classes, d.classes > 0 ? Math.round(d.total / d.classes) : '']);
+                    yearMonthList.push({ y, m });
+                }
+            }
+        });
+        sheets.push({ name: '每月總覽', aoa: overviewAoa });
+
+        yearMonthList.forEach(({ y, m }) => {
+            const westernYear = y + ROC_YEAR_OFFSET;
+            const aoa = buildCalendarAOAForMonth(westernYear, m - 1);
+            sheets.push({ name: `${y}年${m}月`, aoa });
+        });
+
+        downloadWorkbook(sheets, `每日上課收入_全部月份.xlsx`);
+    }
+
     function calculateTotals() {
         let monthlyTotal = 0;
         let classCount = 0;
@@ -2493,7 +2581,19 @@ ${recentTrend.join('\n')}
         return null;
     }
 
-    const USD_FIXED_RATE = 29;
+    /* 美金匯率：預設 29，可在畫面上的輸入框修改，並會存到 localStorage／雲端同步 */
+    let usdRate = parseFloat(localStorage.getItem('usdRate'));
+    if (isNaN(usdRate) || usdRate <= 0) usdRate = 29;
+
+    function updateUsdRate(value) {
+        const n = parseFloat(value);
+        usdRate = (!isNaN(n) && n > 0) ? n : 29;
+        localStorage.setItem('usdRate', String(usdRate));
+        const input = document.getElementById('usdRateInput');
+        if (input) input.value = usdRate;
+        renderTable();
+        saveData();
+    }
 
     /* 依幣別模式，重新計算該列所有自動欄位（每次 render 都會重算，確保顯示永遠正確） */
     function recalcRow(r) {
@@ -2522,9 +2622,9 @@ ${recentTrend.join('\n')}
             r.ppFee = '';
             r.ppRate = '';
         } else if (currency === 'usd') {
-            r.rate = USD_FIXED_RATE.toFixed(2);
+            r.rate = usdRate.toFixed(2);
             if (!isNaN(actual)) {
-                r.convTwd = Math.ceil(actual * USD_FIXED_RATE).toString();
+                r.convTwd = Math.ceil(actual * usdRate).toString();
             } else {
                 r.convTwd = '';
             }
@@ -2723,8 +2823,19 @@ ${recentTrend.join('\n')}
     }
 
     /* 統一的欄位更新入口（date／text 欄位，onchange 觸發）：更新後重新計算並重繪整列 */
+    /* 依「每堂收費」判斷的幣別，自動帶入的預設匯款方式（僅在「匯款方式」欄位目前是空的時候才會自動帶入，
+       一旦使用者自己填過／改過，就不會再被自動覆蓋） */
+    const DEFAULT_METHOD_BY_CURRENCY = { peso: '海產代轉', usd: 'PayPal', twd: '現金-國泰' };
+
     function updateField(index, field, value) {
         records[index][field] = value;
+        if (field === 'fee') {
+            const currency = detectFeeCurrency(value);
+            const defaultMethod = DEFAULT_METHOD_BY_CURRENCY[currency];
+            if (defaultMethod && !records[index].method) {
+                records[index].method = defaultMethod;
+            }
+        }
         renderTable();
         saveData();
     }
@@ -2992,6 +3103,7 @@ ${monthLines.join('\n') || '（尚無資料）'}
         reader.readAsArrayBuffer(file);
     }
 
+    { const usdRateInputEl = document.getElementById('usdRateInput'); if (usdRateInputEl) usdRateInputEl.value = usdRate; }
     renderTable();
     renderSummary();
 
@@ -3222,7 +3334,7 @@ ${monthLines.join('\n') || '（尚無資料）'}
     function actualSaveNow(){
         const ref = actualDocRef();
         if (!ref) return;
-        window.firebaseSetDoc(ref, { records, updatedAt: Date.now() })
+        window.firebaseSetDoc(ref, { records, usdRate, updatedAt: Date.now() })
             .catch(e => console.error('實際收入紀錄 雲端儲存失敗', e));
     }
     function actualSave(){
@@ -3239,7 +3351,7 @@ ${monthLines.join('\n') || '（尚無資料）'}
                 const snap = await window.firebaseGetDoc(ref);
                 if (!snap.exists()) {
                     console.log('[實際收入紀錄] 雲端尚無資料，正在把本機資料上傳為初始版本...');
-                    await window.firebaseSetDoc(ref, { records, updatedAt: Date.now() });
+                    await window.firebaseSetDoc(ref, { records, usdRate, updatedAt: Date.now() });
                     console.log('[實際收入紀錄] 本機資料已成功上傳為雲端初始版本 ✓');
                 }
             } catch (e) { console.error('[實際收入紀錄] 首次同步檢查失敗', e); }
@@ -3255,6 +3367,12 @@ ${monthLines.join('\n') || '（尚無資料）'}
             if (doc.exists()) {
                 const d = doc.data();
                 if (d.records) { records = d.records; localStorage.setItem('actualIncomeRecords', JSON.stringify(records)); }
+                if (!isNaN(parseFloat(d.usdRate)) && d.usdRate > 0) {
+                    usdRate = d.usdRate;
+                    localStorage.setItem('usdRate', String(usdRate));
+                    const usdRateInputEl = document.getElementById('usdRateInput');
+                    if (usdRateInputEl) usdRateInputEl.value = usdRate;
+                }
             }
             if (typeof renderTable === 'function') renderTable();
             if (typeof renderSummary === 'function') renderSummary();
@@ -4259,9 +4377,8 @@ function stdCompareStudentNames(a, b){
 }
 
 function stdUpdateDropdown(){
-    const select = document.getElementById('stdStudentDropdown');
-    if(!select) return;
-    select.innerHTML = '<option value="">-- 選擇學生 --</option>';
+    const wrap = document.getElementById('stdStudentTabs');
+    if(!wrap) return;
     const ids = Object.keys(stdDb).filter(id => {
         const isArchived = stdDb[id].isArchived || false;
         return (stdCurrentView === 'active' && !isArchived) || (stdCurrentView === 'archived' && isArchived);
@@ -4271,13 +4388,23 @@ function stdUpdateDropdown(){
         const nameB = (stdDb[idB].basic && stdDb[idB].basic.name) || '未命名學生';
         return stdCompareStudentNames(nameA, nameB);
     });
-    ids.forEach(id => {
-        const option = document.createElement('option');
-        option.value = id;
-        option.textContent = (stdDb[id].basic && stdDb[id].basic.name) || '未命名學生';
-        if(id === stdCurrentId) option.selected = true;
-        select.appendChild(option);
-    });
+    if(ids.length === 0){
+        wrap.innerHTML = '<span class="student-tabs-empty">（目前沒有學生）</span>';
+        return;
+    }
+    wrap.innerHTML = ids.map(id => {
+        const name = (stdDb[id].basic && stdDb[id].basic.name) || '未命名學生';
+        const activeClass = (id === stdCurrentId) ? ' active' : '';
+        const safeName = String(name).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return `<button type="button" class="student-tab${activeClass}" onclick="stdSelectStudent('${id}')">${safeName}</button>`;
+    }).join('');
+}
+
+/* 點擊「見出紙」名字分頁，直接切換到該學生資料 */
+function stdSelectStudent(id){
+    stdCurrentId = id || '';
+    stdUpdateDropdown();
+    stdLoadStudentInfo();
 }
 
 function stdAddNewStudent(){
@@ -4292,7 +4419,6 @@ function stdAddNewStudent(){
     stdCurrentId = newId;
     stdSaveData();
     stdUpdateDropdown();
-    document.getElementById('stdStudentDropdown').value = newId;
     stdLoadStudentInfo();
 }
 
@@ -4311,10 +4437,6 @@ function stdToggleBasicInfo(){
 }
 
 function stdLoadStudentInfo(){
-    const select = document.getElementById('stdStudentDropdown');
-    if(!select) return;
-    stdCurrentId = select.value;
-
     const basicCard = document.getElementById('stdBasicInfoCard');
     const classCard = document.getElementById('stdClassRecordCard');
     const emptyHint = document.getElementById('stdEmptyHint');
@@ -4342,7 +4464,7 @@ function stdLoadStudentInfo(){
     document.getElementById('std_info_goal').value = s.goal || '';
     document.getElementById('std_info_status').value = s.status || '';
 
-    stdSetBasicInfoCollapsed(window.innerWidth <= 700); // 手機預設收合、電腦預設展開
+    stdSetBasicInfoCollapsed(true); // 手機／電腦都預設收合（年齡～目標），「基本狀況」不受影響、一律顯示
 
     stdRenderClasses();
 }
@@ -4362,8 +4484,7 @@ function stdSaveBasicInfo(){
         status: document.getElementById('std_info_status').value
     };
     stdSaveData();
-    const option = document.querySelector(`#stdStudentDropdown option[value="${stdCurrentId}"]`);
-    if(option) option.textContent = stdDb[stdCurrentId].basic.name || '未命名學生';
+    stdUpdateDropdown();
 }
 
 function stdArchiveCurrentStudent(){
@@ -4384,7 +4505,8 @@ function stdRestoreCurrentStudent(){
         const targetId = stdCurrentId;
         stdSaveData();
         stdToggleView('active');
-        document.getElementById('stdStudentDropdown').value = targetId;
+        stdCurrentId = targetId;
+        stdUpdateDropdown();
         stdLoadStudentInfo();
     }
 }
