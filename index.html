@@ -1431,7 +1431,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 
         <div class="class-record-card" id="stdNotesCard" style="display:none;">
             <div class="sec" style="margin:0 0 10px;border:none;padding:0;">📝 備課備註</div>
-            <textarea id="stdNotesTextarea" rows="16" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13px;padding:10px 12px;border-radius:8px;border:1px solid var(--forest-line);color:var(--forest-deep);resize:vertical;" placeholder="自由填寫備課備註…" onchange="stdSaveNotes(this.value)"></textarea>
+            <textarea id="stdNotesTextarea" rows="16" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13px;padding:10px 12px;border-radius:8px;border:1px solid var(--forest-line);color:var(--forest-deep);resize:vertical;" placeholder="自由填寫備課備註…" oninput="stdNotesOnInput(this.value)" onblur="stdNotesOnBlur(this.value)"></textarea>
         </div>
     </div>
 </div>
@@ -1557,6 +1557,12 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
             renderSummary();
             requestAnimationFrame(() => {
                 const wrap = document.getElementById('recordTableWrap');
+                if (wrap) wrap.scrollTop = wrap.scrollHeight;
+            });
+        } else if (tab === 'students') {
+            // 切換分頁再切回「學生上課狀況」時，也要自動捲動到目前選取學生的最新一筆課程紀錄
+            requestAnimationFrame(() => {
+                const wrap = document.querySelector('#stdClassRecordCard .table-wrap');
                 if (wrap) wrap.scrollTop = wrap.scrollHeight;
             });
         }
@@ -3742,7 +3748,7 @@ function schedSaveData(){
      若用 merge，Firestore 對巢狀物件（例如 unstable、retired）只會做「深層合併」，
      本機刪掉的 key（例如取消勾選「不穩定」、恢復課程）並不會真的從雲端移除，
      下次同步回來又會被還原，造成「勾了就取消不掉」之類的 bug。改成整份覆寫即可。 */
-  window.firebaseSetDoc(ref,{schedule,rates,unstable,retired,studentInfo,updatedAt:Date.now()})
+  window.firebaseSetDoc(ref,{schedule,rates,unstable,retired,studentInfo,fxRows,fxRate:fxRateVal,updatedAt:Date.now()})
     .then(()=>setSaveStatus('saved'))
     .catch(e=>{console.error(e);setSaveStatus('error');});
 }
@@ -3752,10 +3758,16 @@ function listenCloudData(){
   if(scheduleUnsub){ scheduleUnsub(); scheduleUnsub=null; }
   scheduleUnsub=window.firebaseOnSnapshot(ref,doc=>{
     if(doc.metadata && doc.metadata.hasPendingWrites) return; // 忽略本機寫入回音
-    if(doc.exists()){const d=doc.data();if(d.schedule)schedule=d.schedule;if(d.rates)rates=d.rates;unstable=d.unstable||{};retired=d.retired||{};studentInfo=d.studentInfo||{};}
+    if(doc.exists()){
+      const d=doc.data();
+      if(d.schedule)schedule=d.schedule;if(d.rates)rates=d.rates;unstable=d.unstable||{};retired=d.retired||{};studentInfo=d.studentInfo||{};
+      fxRows=(Array.isArray(d.fxRows)&&d.fxRows.length)?d.fxRows:[{peso:'',est:''}];
+      fxRateVal=(typeof d.fxRate==='number'&&d.fxRate>0)?d.fxRate:1.8;
+    }
     scheduleCloudLoaded=true;
     setSaveStatus('saved');
     renderSched();
+    if(typeof refreshFxModalFromCloud==='function') refreshFxModalFromCloud();
   },err=>{console.error(err);setSaveStatus('error');});
 }
 function setSaveStatus(s){
@@ -4196,23 +4208,10 @@ function switchFeeSubTab(tab){
   if(retiredEl)retiredEl.style.display=(tab==='retired')?'':'none';
 }
 
-/* ── 💱 匯率換算預估：可拖曳懸浮視窗，預設披索→台幣 1.8:1，資料存在本機瀏覽器（localStorage） ── */
-let fxRows=[];
+/* ── 💱 匯率換算預估：可拖曳懸浮視窗，預設披索→台幣 1.8:1，
+   資料跟課表其他資料一樣同步到 Firebase（schedules/{uid} 文件裡的 fxRows／fxRate 欄位） ── */
+let fxRows=[{peso:'',est:''}];
 let fxRateVal=1.8;
-function loadFxState(){
-  try{
-    const raw=localStorage.getItem('fxEstimateData');
-    if(raw){
-      const d=JSON.parse(raw);
-      fxRows=Array.isArray(d.rows)?d.rows:[];
-      fxRateVal=(typeof d.rate==='number'&&d.rate>0)?d.rate:1.8;
-    }
-  }catch(e){}
-  if(!fxRows||fxRows.length===0)fxRows=[{peso:'',est:''}];
-}
-function saveFxState(){
-  try{ localStorage.setItem('fxEstimateData',JSON.stringify({rows:fxRows,rate:fxRateVal})); }catch(e){}
-}
 function currentFxRate(){
   const el=document.getElementById('fxRateInput');
   const v=el?parseFloat(el.value):NaN;
@@ -4220,7 +4219,7 @@ function currentFxRate(){
 }
 function renderFxTable(){
   fxRateVal=currentFxRate();
-  saveFxState();
+  scheduleSave();
   const tbody=document.getElementById('fxTableBody');
   if(!tbody)return;
   tbody.innerHTML=fxRows.map((row,idx)=>{
@@ -4234,12 +4233,11 @@ function renderFxTable(){
     </tr>`;
   }).join('');
 }
-function updateFxPeso(idx,val){ if(fxRows[idx]){fxRows[idx].peso=val; saveFxState(); renderFxTable();} }
-function updateFxEst(idx,val){ if(fxRows[idx]){fxRows[idx].est=val; saveFxState();} }
-function addFxRow(){ fxRows.push({peso:'',est:''}); saveFxState(); renderFxTable(); }
-function deleteFxRow(idx){ fxRows.splice(idx,1); if(fxRows.length===0)fxRows.push({peso:'',est:''}); saveFxState(); renderFxTable(); }
+function updateFxPeso(idx,val){ if(fxRows[idx]){fxRows[idx].peso=val; scheduleSave(); renderFxTable();} }
+function updateFxEst(idx,val){ if(fxRows[idx]){fxRows[idx].est=val; scheduleSave();} }
+function addFxRow(){ fxRows.push({peso:'',est:''}); scheduleSave(); renderFxTable(); }
+function deleteFxRow(idx){ fxRows.splice(idx,1); if(fxRows.length===0)fxRows.push({peso:'',est:''}); scheduleSave(); renderFxTable(); }
 function openFxModal(){
-  loadFxState();
   const rateInput=document.getElementById('fxRateInput');
   if(rateInput)rateInput.value=fxRateVal;
   renderFxTable();
@@ -4249,6 +4247,25 @@ function openFxModal(){
 function closeFxModal(){
   const modal=document.getElementById('fxModal');
   if(modal)modal.style.display='none';
+}
+/* 若視窗開著時雲端資料有更新（例如其他裝置也在編輯），同步刷新畫面上的匯率與表格 */
+function refreshFxModalFromCloud(){
+  const modal=document.getElementById('fxModal');
+  if(!modal || modal.style.display==='none') return;
+  const rateInput=document.getElementById('fxRateInput');
+  if(rateInput) rateInput.value=fxRateVal;
+  const tbody=document.getElementById('fxTableBody');
+  if(!tbody) return;
+  tbody.innerHTML=fxRows.map((row,idx)=>{
+    const peso=parseFloat(row.peso);
+    const twd=(isFinite(peso)&&fxRateVal>0)?Math.round(peso*fxRateVal):null;
+    return `<tr>
+      <td><input type="number" step="1" value="${row.peso!=null?row.peso:''}" placeholder="例：500" oninput="updateFxPeso(${idx},this.value)"/></td>
+      <td style="text-align:center;color:var(--forest-deep);font-weight:700">${twd!==null?('NT$ '+twd.toLocaleString()):'—'}</td>
+      <td><input type="text" value="${(row.est||'').replace(/"/g,'&quot;')}" placeholder="自行填寫" oninput="updateFxEst(${idx},this.value)"/></td>
+      <td style="text-align:center"><button type="button" class="fx-del" onclick="deleteFxRow(${idx})">刪除</button></td>
+    </tr>`;
+  }).join('');
 }
 /* 讓匯率換算視窗可用滑鼠／觸控拖曳（拖動標題列） */
 (function initFxDrag(){
@@ -4689,6 +4706,20 @@ function stdSaveNotes(val){
     stdSaveData();
 }
 
+/* 備課備註自動存檔：打字時每隔幾秒（5秒）自動存一次，避免瀏覽器意外關閉遺失內容；
+   離開輸入框（失去焦點）時也會立刻存一次，兩者共用同一個 debounce 計時器 */
+let stdNotesSaveTimer = null;
+function stdNotesOnInput(val){
+    stdNotes = val;
+    clearTimeout(stdNotesSaveTimer);
+    stdNotesSaveTimer = setTimeout(() => { stdSaveData(); }, 5000);
+}
+function stdNotesOnBlur(val){
+    stdNotes = val;
+    clearTimeout(stdNotesSaveTimer);
+    stdSaveData();
+}
+
 /* 學生姓名排序：英文姓名（A-Z）排在前面，中文姓名依「筆劃」排序放在後面 */
 const STD_STROKE_COLLATOR = (() => {
     try { return new Intl.Collator('zh-Hant-u-co-stroke', { usage: 'sort' }); }
@@ -4804,6 +4835,9 @@ function stdLoadStudentInfo(){
     stdSetBasicInfoCollapsed(true); // 手機／電腦都預設收合（年齡～目標），「基本狀況」不受影響、一律顯示
 
     stdRenderClasses();
+    // 每次進入（或切換到）某位學生的分頁時，自動捲動到「課程紀錄」最新一筆（最下面）
+    const classWrap = document.querySelector('#stdClassRecordCard .table-wrap');
+    if (classWrap) setTimeout(() => { classWrap.scrollTop = classWrap.scrollHeight; }, 50);
 }
 
 function stdSaveBasicInfo(){
@@ -5029,11 +5063,25 @@ function stdExportExcel(){
         sheets.push({ name: basic.name || id, aoa });
     });
     sheets.unshift({ name: '總覽', aoa: overview });
+
+    // 📝 備課備註：獨立一張工作表，內容跟畫面上「備課備註」分頁完全一致
+    const headerStyle = { bg: 'FF3F6B4A', color: 'FFFFFFFF', bold: true, halign: 'center' };
+    const notesLines = (stdNotes || '').split('\n');
+    const noteRows = [[{ v: '備課備註', colspan: 1, ...headerStyle }]];
+    if (notesLines.length === 1 && notesLines[0].trim() === '') {
+        noteRows.push([{ v: '（尚無備註）', colspan: 1, bg: null, color: null, bold: false, halign: 'left' }]);
+    } else {
+        notesLines.forEach(line => {
+            noteRows.push([{ v: line, colspan: 1, bg: null, color: null, bold: false, halign: 'left' }]);
+        });
+    }
+    sheets.splice(1, 0, { name: '備課備註', rows: noteRows, colWidths: [90] });
+
     downloadWorkbook(sheets, `學生上課狀況_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 function stdExportJSON(){
-    const dataStr = JSON.stringify(stdDb, null, 2);
+    const dataStr = JSON.stringify({ data: stdDb, notes: stdNotes }, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
