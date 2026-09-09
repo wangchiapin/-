@@ -4242,6 +4242,20 @@ function currentFxRate(){
   const v=el?parseFloat(el.value):NaN;
   return (isFinite(v)&&v>0)?v:0;
 }
+/* 依「墨西哥披索」欄位金額由小到大排序；空白／無法辨識金額的列排到最後 */
+function fxPesoNum(row){
+  const n=parseFloat(row.peso);
+  return isFinite(n)?n:null;
+}
+function sortFxRowsByAmount(){
+  fxRows.sort((a,b)=>{
+    const na=fxPesoNum(a), nb=fxPesoNum(b);
+    if(na===null && nb===null) return 0;
+    if(na===null) return 1;
+    if(nb===null) return -1;
+    return na-nb;
+  });
+}
 function renderFxTable(){
   fxRateVal=currentFxRate();
   scheduleSave();
@@ -4251,18 +4265,40 @@ function renderFxTable(){
     const peso=parseFloat(row.peso);
     const twd=(isFinite(peso)&&fxRateVal>0)?Math.round(peso*fxRateVal):null;
     return `<tr>
-      <td><input type="number" step="1" value="${row.peso!=null?row.peso:''}" placeholder="例：500" oninput="updateFxPeso(${idx},this.value)"/></td>
-      <td style="text-align:center;color:var(--forest-deep);font-weight:700">${twd!==null?('NT$ '+twd.toLocaleString()):'—'}</td>
+      <td><input type="number" step="1" value="${row.peso!=null?row.peso:''}" placeholder="例：500" oninput="updateFxPeso(${idx},this.value)" onblur="commitFxPesoSort()"/></td>
+      <td class="fx-twd-cell" style="text-align:center;color:var(--forest-deep);font-weight:700">${twd!==null?('NT$ '+twd.toLocaleString()):'—'}</td>
       <td><input type="text" value="${(row.est||'').replace(/"/g,'&quot;')}" placeholder="自行填寫" oninput="updateFxEst(${idx},this.value)"/></td>
       <td style="text-align:center"><button type="button" class="fx-del" onclick="deleteFxRow(${idx})">刪除</button></td>
     </tr>`;
   }).join('');
 }
-function updateFxPeso(idx,val){ if(fxRows[idx]){fxRows[idx].peso=val; scheduleSave(); renderFxTable();} }
+/* 輸入披索金額時：只更新資料與該列即時試算的台幣金額，「不」整表重繪，
+   避免輸入框在每次按鍵後被整個重新建立而失去游標焦點 */
+function updateFxPeso(idx,val){
+  if(!fxRows[idx]) return;
+  fxRows[idx].peso=val;
+  scheduleSave();
+  const tbody=document.getElementById('fxTableBody');
+  const tr=tbody && tbody.children[idx];
+  if(!tr) return;
+  const twdCell=tr.querySelector('.fx-twd-cell');
+  if(!twdCell) return;
+  const peso=parseFloat(val);
+  const rate=currentFxRate();
+  const twd=(isFinite(peso)&&rate>0)?Math.round(peso*rate):null;
+  twdCell.textContent = twd!==null ? ('NT$ '+twd.toLocaleString()) : '—';
+}
+/* 離開披索欄位（打完金額）時才依金額大小重新排序＋整表重繪 */
+function commitFxPesoSort(){
+  sortFxRowsByAmount();
+  scheduleSave();
+  renderFxTable();
+}
 function updateFxEst(idx,val){ if(fxRows[idx]){fxRows[idx].est=val; scheduleSave();} }
 function addFxRow(){ fxRows.push({peso:'',est:''}); scheduleSave(); renderFxTable(); }
-function deleteFxRow(idx){ fxRows.splice(idx,1); if(fxRows.length===0)fxRows.push({peso:'',est:''}); scheduleSave(); renderFxTable(); }
+function deleteFxRow(idx){ fxRows.splice(idx,1); if(fxRows.length===0)fxRows.push({peso:'',est:''}); sortFxRowsByAmount(); scheduleSave(); renderFxTable(); }
 function openFxModal(){
+  sortFxRowsByAmount();
   const rateInput=document.getElementById('fxRateInput');
   if(rateInput)rateInput.value=fxRateVal;
   renderFxTable();
@@ -4277,20 +4313,10 @@ function closeFxModal(){
 function refreshFxModalFromCloud(){
   const modal=document.getElementById('fxModal');
   if(!modal || modal.style.display==='none') return;
+  sortFxRowsByAmount();
   const rateInput=document.getElementById('fxRateInput');
   if(rateInput) rateInput.value=fxRateVal;
-  const tbody=document.getElementById('fxTableBody');
-  if(!tbody) return;
-  tbody.innerHTML=fxRows.map((row,idx)=>{
-    const peso=parseFloat(row.peso);
-    const twd=(isFinite(peso)&&fxRateVal>0)?Math.round(peso*fxRateVal):null;
-    return `<tr>
-      <td><input type="number" step="1" value="${row.peso!=null?row.peso:''}" placeholder="例：500" oninput="updateFxPeso(${idx},this.value)"/></td>
-      <td style="text-align:center;color:var(--forest-deep);font-weight:700">${twd!==null?('NT$ '+twd.toLocaleString()):'—'}</td>
-      <td><input type="text" value="${(row.est||'').replace(/"/g,'&quot;')}" placeholder="自行填寫" oninput="updateFxEst(${idx},this.value)"/></td>
-      <td style="text-align:center"><button type="button" class="fx-del" onclick="deleteFxRow(${idx})">刪除</button></td>
-    </tr>`;
-  }).join('');
+  renderFxTable();
 }
 /* 讓匯率換算視窗可用滑鼠／觸控拖曳（拖動標題列） */
 (function initFxDrag(){
