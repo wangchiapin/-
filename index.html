@@ -1015,6 +1015,26 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 #scheduleTab .cards{grid-template-columns:repeat(2,1fr)}
 #scheduleTab table.sched{table-layout:auto;min-width:480px}
 }
+
+/* 💡 懸浮訊息卡：跨分頁常駐（不屬於任何 tab 容器，故不受分頁切換的 display:none 影響），
+   固定在畫面右側，可拖曳、可關閉；桌面版預設展開，手機版預設縮成小圖示（見下方 JS 判斷） */
+.marquee-widget{position:fixed;top:90px;right:14px;width:210px;max-width:70vw;background:var(--forest-card);border:1px solid var(--forest-line);border-radius:10px;box-shadow:0 8px 22px rgba(0,0,0,0.22);z-index:95;overflow:hidden}
+.marquee-header{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:5px 7px;background:var(--forest-mid);color:#fff;cursor:move;user-select:none}
+.marquee-title{font-size:11px;font-weight:700;font-family:'Noto Serif TC',serif;white-space:nowrap}
+.marquee-controls{display:flex;gap:2px;flex-shrink:0}
+.marquee-btn{background:rgba(255,255,255,0.18);color:#fff;border:none;border-radius:9px;width:18px;height:18px;line-height:18px;padding:0;cursor:pointer;font-size:10px}
+.marquee-btn:hover{background:rgba(255,255,255,0.32)}
+.marquee-body{padding:7px 9px;min-height:34px;display:flex;align-items:center;cursor:pointer}
+.marquee-msg{font-size:11.5px;line-height:1.5;color:var(--forest-deep);transition:opacity 0.25s ease;opacity:1;width:100%}
+.marquee-msg.fading{opacity:0}
+.marquee-dots{display:flex;justify-content:center;gap:3px;padding:0 0 6px}
+.marquee-dots .dot{width:4px;height:4px;border-radius:50%;background:var(--forest-line)}
+.marquee-dots .dot.active{background:var(--forest-mid)}
+.marquee-mini-icon{position:fixed;top:90px;right:14px;width:34px;height:34px;border-radius:50%;background:var(--forest-mid);color:#fff;border:none;font-size:15px;box-shadow:0 6px 16px rgba(0,0,0,0.28);cursor:pointer;z-index:95;align-items:center;justify-content:center}
+@media(max-width:520px){
+  .marquee-widget{width:180px;top:76px;right:10px}
+  .marquee-mini-icon{top:76px;right:10px;width:30px;height:30px;font-size:13px}
+}
 </style>
 </head>
 <body style="visibility:hidden;">
@@ -1397,6 +1417,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
                     <div class="form-group"><label>念了多久</label><input type="text" id="std_info_duration" onchange="stdSaveBasicInfo()"></div>
                     <div class="form-group"><label>為什麼想學</label><input type="text" id="std_info_reason" onchange="stdSaveBasicInfo()"></div>
                     <div class="form-group"><label>目標</label><input type="text" id="std_info_goal" onchange="stdSaveBasicInfo()"></div>
+                    <div class="form-group"><label>起始上課日期（選填）</label><input type="date" id="std_info_startdate" onchange="stdSaveBasicInfo()"></div>
                 </div>
             </div>
             <div class="form-group full-width" style="margin-top:12px;"><label>基本狀況</label><textarea id="std_info_status" rows="2" onchange="stdSaveBasicInfo()"></textarea></div>
@@ -3748,7 +3769,7 @@ function schedSaveData(){
      若用 merge，Firestore 對巢狀物件（例如 unstable、retired）只會做「深層合併」，
      本機刪掉的 key（例如取消勾選「不穩定」、恢復課程）並不會真的從雲端移除，
      下次同步回來又會被還原，造成「勾了就取消不掉」之類的 bug。改成整份覆寫即可。 */
-  window.firebaseSetDoc(ref,{schedule,rates,unstable,retired,studentInfo,fxRows,fxRate:fxRateVal,updatedAt:Date.now()})
+  window.firebaseSetDoc(ref,{schedule,rates,unstable,retired,studentInfo,fxRows,fxRate:fxRateVal,monthlyGoals,updatedAt:Date.now()})
     .then(()=>setSaveStatus('saved'))
     .catch(e=>{console.error(e);setSaveStatus('error');});
 }
@@ -3763,6 +3784,7 @@ function listenCloudData(){
       if(d.schedule)schedule=d.schedule;if(d.rates)rates=d.rates;unstable=d.unstable||{};retired=d.retired||{};studentInfo=d.studentInfo||{};
       fxRows=(Array.isArray(d.fxRows)&&d.fxRows.length)?d.fxRows:[{peso:'',est:''}];
       fxRateVal=(typeof d.fxRate==='number'&&d.fxRate>0)?d.fxRate:1.8;
+      monthlyGoals=(d.monthlyGoals && typeof d.monthlyGoals==='object')?d.monthlyGoals:{115:35000};
     }
     scheduleCloudLoaded=true;
     setSaveStatus('saved');
@@ -4212,6 +4234,9 @@ function switchFeeSubTab(tab){
    資料跟課表其他資料一樣同步到 Firebase（schedules/{uid} 文件裡的 fxRows／fxRate 欄位） ── */
 let fxRows=[{peso:'',est:''}];
 let fxRateVal=1.8;
+/* 每月目標收入，依民國年度分別設定（例如 115 年度每月目標 35000），
+   透過懸浮訊息卡的 🎯 按鈕用 prompt() 設定，跟課表其他資料一起存在 schedules/{uid} 雲端文件 */
+let monthlyGoals={115:35000};
 function currentFxRate(){
   const el=document.getElementById('fxRateInput');
   const v=el?parseFloat(el.value):NaN;
@@ -4830,6 +4855,7 @@ function stdLoadStudentInfo(){
     document.getElementById('std_info_duration').value = s.duration || '';
     document.getElementById('std_info_reason').value = s.reason || '';
     document.getElementById('std_info_goal').value = s.goal || '';
+    document.getElementById('std_info_startdate').value = s.startDate || '';
     document.getElementById('std_info_status').value = s.status || '';
 
     stdSetBasicInfoCollapsed(true); // 手機／電腦都預設收合（年齡～目標），「基本狀況」不受影響、一律顯示
@@ -4852,6 +4878,7 @@ function stdSaveBasicInfo(){
         duration: document.getElementById('std_info_duration').value,
         reason: document.getElementById('std_info_reason').value,
         goal: document.getElementById('std_info_goal').value,
+        startDate: document.getElementById('std_info_startdate').value,
         status: document.getElementById('std_info_status').value
     };
     stdSaveData();
@@ -5053,6 +5080,7 @@ function stdExportExcel(){
             ['念了多久', basic.duration || ''],
             ['為什麼想學', basic.reason || ''],
             ['目標', basic.goal || ''],
+            ['起始上課日期', basic.startDate || ''],
             ['基本狀況', basic.status || ''],
             [],
             ['時間','價格','累積時數','預付倒數','課程進度','下次進度','作業','上課狀況']
@@ -5367,7 +5395,502 @@ function updateStdGateUI(user){
 window.updateStdGateUI = updateStdGateUI;
 </script>
 
+<!-- 💡 懸浮訊息卡：跨分頁常駐，可拖曳／關閉，輪播提醒訊息與經營小統計 -->
+<div id="marqueeWidget" class="marquee-widget">
+  <div class="marquee-header" id="marqueeHeader">
+    <span class="marquee-title">💡 小提醒</span>
+    <div class="marquee-controls">
+      <button type="button" class="marquee-btn" onclick="editMonthlyGoal()" title="設定本月目標收入">🎯</button>
+      <button type="button" class="marquee-btn" onclick="collapseMarqueeToMini()" title="縮小">—</button>
+      <button type="button" class="marquee-btn" onclick="closeMarquee()" title="關閉">✕</button>
+    </div>
+  </div>
+  <div class="marquee-body" id="marqueeBody" onclick="marqueeNext()" title="點一下看下一則">
+    <div class="marquee-msg" id="marqueeMsg">載入中…</div>
+  </div>
+  <div class="marquee-dots" id="marqueeDots"></div>
+</div>
+<button type="button" id="marqueeMiniIcon" class="marquee-mini-icon" onclick="expandMarqueeFromMini()" style="display:none;" title="小提醒">💡</button>
+
 <script>
+
+/* ============================================================
+   💡 懸浮訊息卡：提醒／小統計 訊息產生器 + 輪播／拖曳／收合邏輯
+   運作原則：
+   - 「提醒類」訊息（繳費、太久沒上課、備課待補、里程碑、不穩定學生）只要有任何一則存在，
+     就「只」輪播提醒類訊息；完全沒有提醒時，才輪播「一般統計／金句」。
+   - 每次輪播到新一輪（index 回到 0）時都會重新整理一次資料，確保訊息即時反映最新狀態。
+============================================================ */
+
+const BRAND_START_DATE = new Date(2022, 6, 2); // 品牌／教學工作起始日：2022-07-02
+const TEACHING_QUOTES = [
+    '💡 教生詞時搭配生活情境例句，比死背詞卡更容易記住。',
+    '💡 讓學生開口犯錯，比不敢開口更重要——錯誤是學習的證據。',
+    '💡 每堂課結束前花1分鐘複習關鍵句型，隔天忘記的機率會明顯降低。',
+    '💡 用學生自己的興趣造句，學習動機會提高很多。',
+    '💡 定期回顧舊教材，比一直往前教新內容更能鞏固基礎。',
+    '💡 給學生具體、可執行的小任務，比籠統的「多練習」更有效。',
+    '💡 教學也是一種經營，別忘了偶爾停下來看看自己這陣子的成長。',
+    '💡 學生的進步不一定線性，撞牆期出現時，正是最需要鼓勵的時候。',
+    '💡 好的教材不用多，能持續用、能重複用的才是好教材。',
+    '💡 休息也是教學的一部分，備課備到累了就先休息一下吧。'
+];
+
+/* ── 提醒類（reminders）── */
+
+/* 尚未繳費的學生（沿用跟 stdExportExcel 相同的「預付倒數」邏輯） */
+function genUnpaidReminder(){
+    const names = [];
+    Object.keys(stdDb || {}).forEach(id => {
+        const s = stdDb[id]; if (!s || s.isArchived) return;
+        const classes = s.classes || [];
+        let cd = null;
+        classes.forEach(c => {
+            if (c.prepaidInput && c.prepaidInput.trim() !== '') {
+                const v = parseInt(c.prepaidInput, 10);
+                if (!isNaN(v)) cd = v;
+            } else if (cd !== null) { cd--; }
+        });
+        if (cd !== null && cd <= 0) names.push((s.basic && s.basic.name) || '未命名學生');
+    });
+    if (!names.length) return [];
+    return [`⚠️ 尚未繳費提醒：${names.join('、')}`];
+}
+
+/* 從課程紀錄「時間」欄位（例：3/4 1100，無年份）盡量解析出最近一次上課日期 */
+function parseClassRecordDate(timeStr){
+    if (!timeStr) return null;
+    const m = String(timeStr).match(/(\d{1,2})\/(\d{1,2})/);
+    if (!m) return null;
+    const month = parseInt(m[1], 10), day = parseInt(m[2], 10);
+    if (!month || month > 12 || !day || day > 31) return null;
+    const now = new Date();
+    let d = new Date(now.getFullYear(), month - 1, day);
+    // 換算出來的日期若是「未來超過一個月」，代表這筆其實是去年跨年前的紀錄
+    if (d.getTime() - now.getTime() > 1000 * 60 * 60 * 24 * 30) {
+        d = new Date(now.getFullYear() - 1, month - 1, day);
+    }
+    return d;
+}
+
+/* 超過 14／21／30 天沒上課的學生名單（分級各自成一則訊息） */
+function genInactiveReminders(){
+    const now = new Date();
+    const tier30 = [], tier21 = [], tier14 = [];
+    Object.keys(stdDb || {}).forEach(id => {
+        const s = stdDb[id]; if (!s || s.isArchived) return;
+        const classes = s.classes || [];
+        let latest = null;
+        classes.forEach(c => {
+            const d = parseClassRecordDate(c.time);
+            if (d && (!latest || d > latest)) latest = d;
+        });
+        if (!latest) return;
+        const days = Math.floor((now - latest) / (1000 * 60 * 60 * 24));
+        const name = (s.basic && s.basic.name) || '未命名學生';
+        if (days >= 30) tier30.push(name);
+        else if (days >= 21) tier21.push(name);
+        else if (days >= 14) tier14.push(name);
+    });
+    const msgs = [];
+    if (tier30.length) msgs.push(`📅 超過30天沒上課了：${tier30.join('、')}`);
+    if (tier21.length) msgs.push(`📅 超過21天沒上課了：${tier21.join('、')}`);
+    if (tier14.length) msgs.push(`📅 超過14天沒上課了：${tier14.join('、')}`);
+    return msgs;
+}
+
+/* 最新一筆課程紀錄的「作業」或「下次進度」是空白的學生（備課資料待補齊） */
+function genMissingPrepReminder(){
+    const names = [];
+    Object.keys(stdDb || {}).forEach(id => {
+        const s = stdDb[id]; if (!s || s.isArchived) return;
+        const classes = s.classes || [];
+        if (!classes.length) return;
+        const last = classes[classes.length - 1];
+        if ((!last.homework || !last.homework.trim()) || (!last.next || !last.next.trim())) {
+            names.push((s.basic && s.basic.name) || '未命名學生');
+        }
+    });
+    if (!names.length) return [];
+    return [`📝 備課資料待補齊（作業／下次進度空白）：${names.join('、')}`];
+}
+
+/* 累積堂數里程碑：10、30、50、100，之後每滿50堂提醒一次 */
+function genClassCountMilestones(){
+    const msgs = [];
+    const exactThresholds = [10, 30, 50, 100];
+    Object.keys(stdDb || {}).forEach(id => {
+        const s = stdDb[id]; if (!s || s.isArchived) return;
+        const n = (s.classes || []).length;
+        const hit = exactThresholds.includes(n) ? n : ((n > 100 && n % 50 === 0) ? n : null);
+        if (hit) {
+            const name = (s.basic && s.basic.name) || '未命名學生';
+            msgs.push(`🎉 恭喜！${name} 已經上滿 ${hit} 堂課了！`);
+        }
+    });
+    return msgs;
+}
+
+/* 教學關係里程碑：滿半年、一年、一年半、兩年…（每半年一次），需要學生「起始上課日期」欄位（選填） */
+function genRelationshipMilestones(){
+    const msgs = [];
+    const now = new Date();
+    const monthMilestones = [6, 12, 18, 24, 30, 36, 42, 48, 54, 60, 66, 72];
+    Object.keys(stdDb || {}).forEach(id => {
+        const s = stdDb[id]; if (!s || s.isArchived) return;
+        const basic = s.basic || {};
+        if (!basic.startDate) return;
+        const start = new Date(basic.startDate);
+        if (isNaN(start.getTime())) return;
+        let months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+        if (now.getDate() < start.getDate()) months--;
+        if (monthMilestones.includes(months)) {
+            const label = (months % 12 === 0) ? `${months / 12}年` : `${months}個月`;
+            msgs.push(`🎂 恭喜！你跟 ${basic.name || '這位學生'} 已經一起學了滿 ${label}！`);
+        }
+    });
+    return msgs;
+}
+
+/* 已標記為「不穩定」的學生名單（排課要保留彈性） */
+function genUnstableReminder(){
+    if (typeof unstable === 'undefined' || typeof getStudents !== 'function') return [];
+    const names = Object.keys(unstable).filter(n => getStudents()[n]);
+    if (!names.length) return [];
+    return [`🔀 排課彈性提醒（不穩定學生）：${names.join('、')}`];
+}
+
+function collectReminderMessages(){
+    return []
+        .concat(genUnpaidReminder())
+        .concat(genInactiveReminders())
+        .concat(genMissingPrepReminder())
+        .concat(genClassCountMilestones())
+        .concat(genRelationshipMilestones())
+        .concat(genUnstableReminder());
+}
+
+/* ── 一般統計類（stats）── */
+
+function ymdStr(y, m /*0-indexed*/, d){ return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`; }
+function sumIncomeForDate(dateStr){
+    let t = 0;
+    (incomeData[dateStr] || []).forEach(v => { const n = parseFloat(v); if (!isNaN(n) && String(v).trim() !== '') t += n; });
+    return t;
+}
+function countIncomeForDate(dateStr){
+    let c = 0;
+    (incomeData[dateStr] || []).forEach(v => { const n = parseFloat(v); if (!isNaN(n) && String(v).trim() !== '') c++; });
+    return c;
+}
+
+/* 本月累積收入，並跟「上個月同一天數」比較 */
+function genMonthIncomeCompare(){
+    if (typeof incomeData === 'undefined' || typeof currentYear === 'undefined') return [];
+    const now = new Date();
+    let curTotal = 0;
+    for (let d = 1; d <= now.getDate(); d++) curTotal += sumIncomeForDate(ymdStr(currentYear, currentMonth, d));
+
+    let prevMonth = currentMonth - 1, prevYear = currentYear;
+    if (prevMonth < 0) { prevMonth = 11; prevYear--; }
+    const daysInPrevMonth = new Date(prevYear, prevMonth + 1, 0).getDate();
+    const compareDay = Math.min(now.getDate(), daysInPrevMonth);
+    let prevTotal = 0;
+    for (let d = 1; d <= compareDay; d++) prevTotal += sumIncomeForDate(ymdStr(prevYear, prevMonth, d));
+
+    const diff = curTotal - prevTotal;
+    const cmp = diff >= 0 ? `多賺 NT$ ${Math.round(diff).toLocaleString()}` : `少賺 NT$ ${Math.round(Math.abs(diff)).toLocaleString()}`;
+    return [`💰 本月累積收入 NT$ ${Math.round(curTotal).toLocaleString()}，比上個月同期${cmp}`];
+}
+
+/* 本週目前已上堂數／收入 */
+function genWeekIncome(){
+    if (typeof incomeData === 'undefined') return [];
+    const now = new Date();
+    const dow = (now.getDay() + 6) % 7; // 0=週一
+    const monday = new Date(now); monday.setDate(now.getDate() - dow); monday.setHours(0, 0, 0, 0);
+    let total = 0, classes = 0;
+    for (let i = 0; i <= dow; i++) {
+        const d = new Date(monday); d.setDate(monday.getDate() + i);
+        const ds = ymdStr(d.getFullYear(), d.getMonth(), d.getDate());
+        total += sumIncomeForDate(ds);
+        classes += countIncomeForDate(ds);
+    }
+    return [`📆 本週目前已上 ${classes} 堂課，收入 NT$ ${Math.round(total).toLocaleString()}`];
+}
+
+/* 本月至今平均每堂收入 */
+function genAvgPerClass(){
+    if (typeof buildMonthlySummaryData !== 'function') return [];
+    const data = buildMonthlySummaryData();
+    const rocY = currentYear - ROC_YEAR_OFFSET;
+    const rec = data.summary[rocY] && data.summary[rocY][currentMonth + 1];
+    if (!rec || !rec.classes) return [];
+    return [`📊 本月至今平均每堂收入約 NT$ ${Math.round(rec.total / rec.classes).toLocaleString()}`];
+}
+
+/* 今天還有幾堂尚未上、預計再入帳多少（依「華語課表」每週固定課表推算） */
+function genRemainingToday(){
+    if (typeof schedule === 'undefined' || typeof TW_HOURS === 'undefined') return [];
+    const now = new Date();
+    const di = (now.getDay() + 6) % 7;
+    const curH = now.getHours();
+    let remCount = 0, remAmt = 0;
+    TW_HOURS.forEach(h => {
+        if (h < curH) return;
+        const e = schedule[cellKey(h, di)];
+        if (e && e.name && e.name !== 'X') { remCount++; remAmt += (rates[e.name] || 0); }
+    });
+    if (!remCount) return [];
+    return [`⏰ 今天還有 ${remCount} 堂課，預計再入帳 NT$ ${remAmt.toLocaleString()}`];
+}
+
+/* 歷史單月最高收入 */
+function genHistoricalMax(){
+    if (typeof buildMonthlySummaryData !== 'function') return [];
+    const data = buildMonthlySummaryData();
+    let maxTotal = -1, maxY = null, maxM = null;
+    Object.keys(data.summary).forEach(y => {
+        Object.keys(data.summary[y]).forEach(m => {
+            const t = data.summary[y][m].total;
+            if (t > maxTotal) { maxTotal = t; maxY = y; maxM = m; }
+        });
+    });
+    if (maxTotal <= 0) return [];
+    return [`🏆 歷史單月最高收入：民國${maxY}年${maxM}月，NT$ ${Math.round(maxTotal).toLocaleString()}`];
+}
+
+/* 距離打平上個月「整月」收入還差多少 */
+function genBreakEven(){
+    if (typeof buildMonthlySummaryData !== 'function') return [];
+    const data = buildMonthlySummaryData();
+    const rocY = currentYear - ROC_YEAR_OFFSET;
+    let prevM = currentMonth, prevY = rocY; // currentMonth 是 0-indexed，剛好等於「上個月」的 1-indexed 月份
+    if (prevM === 0) { prevM = 12; prevY = rocY - 1; }
+    const prevRec = data.summary[prevY] && data.summary[prevY][prevM];
+    if (!prevRec || !prevRec.total) return [];
+    const curRec = data.summary[rocY] && data.summary[rocY][currentMonth + 1];
+    const curTotal = curRec ? curRec.total : 0;
+    const gap = prevRec.total - curTotal;
+    if (gap <= 0) return [`🎉 本月收入已經超過上個月整月總額了，太厲害了！`];
+    return [`🎯 距離打平上個月整月收入（NT$ ${Math.round(prevRec.total).toLocaleString()}）還差 NT$ ${Math.round(gap).toLocaleString()}`];
+}
+
+/* 本月新增學生數／目前累計在學學生數（用學生 ID 內含的建立時間戳 std_<timestamp>） */
+function genNewStudentsThisMonth(){
+    if (typeof stdDb === 'undefined') return [];
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    let newCount = 0, activeCount = 0;
+    Object.keys(stdDb).forEach(id => {
+        const s = stdDb[id];
+        if (!s.isArchived) activeCount++;
+        const m = id.match(/^std_(\d+)$/);
+        if (m && parseInt(m[1], 10) >= monthStart) newCount++;
+    });
+    return [`🧑‍🎓 本月新增 ${newCount} 位學生，目前累計在學學生 ${activeCount} 位`];
+}
+
+/* 目前整週課表空堂數／排課滿載率 */
+function genOpenSlotsAndFillRate(){
+    if (typeof schedule === 'undefined' || typeof TW_HOURS === 'undefined') return [];
+    let total = 0, busy = 0;
+    for (let di = 0; di < 7; di++) {
+        TW_HOURS.forEach(h => {
+            total++;
+            const e = schedule[cellKey(h, di)];
+            if (e && e.name && e.name !== 'X') busy++;
+        });
+    }
+    const open = total - busy;
+    const rate = total > 0 ? Math.round((busy / total) * 100) : 0;
+    return [
+        `🗓 目前整週課表還有 ${open} 個空堂可以安排新學生`,
+        `📈 目前排課滿載率約 ${rate}%（${busy}/${total} 堂）`
+    ];
+}
+
+/* 今天最早／最晚一堂課時間 */
+function genTodayFirstLast(){
+    if (typeof schedule === 'undefined' || typeof TW_HOURS === 'undefined') return [];
+    const now = new Date();
+    const di = (now.getDay() + 6) % 7;
+    const hours = TW_HOURS.filter(h => { const e = schedule[cellKey(h, di)]; return e && e.name && e.name !== 'X'; });
+    if (!hours.length) return [`😌 今天沒有排課，好好休息一下！`];
+    const first = Math.min(...hours), last = Math.max(...hours);
+    return [`⏱ 今天課程時間：${String(first).padStart(2, '0')}:00 - ${String(last + 1).padStart(2, '0')}:00`];
+}
+
+/* 本月目標收入（🎯 按鈕可設定，依民國年度分別記錄） */
+function genMonthlyGoal(){
+    if (typeof monthlyGoals === 'undefined' || typeof buildMonthlySummaryData !== 'function') return [];
+    const rocY = currentYear - ROC_YEAR_OFFSET;
+    const goal = monthlyGoals[rocY];
+    if (!goal) return [];
+    const data = buildMonthlySummaryData();
+    const rec = data.summary[rocY] && data.summary[rocY][currentMonth + 1];
+    const cur = rec ? rec.total : 0;
+    const diff = goal - cur;
+    if (diff <= 0) return [`🎯 太棒了！本月已達成 NT$ ${goal.toLocaleString()} 目標（超出 NT$ ${Math.round(-diff).toLocaleString()}）`];
+    return [`🎯 距離本月目標 NT$ ${goal.toLocaleString()} 還差 NT$ ${Math.round(diff).toLocaleString()}`];
+}
+
+/* 品牌／教學工作經營天數彩蛋（起始日：2022-07-02） */
+function genBrandAnniversary(){
+    const now = new Date();
+    const days = Math.floor((now - BRAND_START_DATE) / (1000 * 60 * 60 * 24));
+    if (days < 0) return [];
+    const years = (days / 365.25).toFixed(1);
+    return [`🌱 每天一分鐘開始教學至今已經 ${days.toLocaleString()} 天了（約 ${years} 年）`];
+}
+
+/* 教學小語（每次重建輪播佇列時隨機抽 2 句，避免同一輪出現太多次） */
+function genQuotes(){
+    const shuffled = TEACHING_QUOTES.slice().sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 2);
+}
+
+function collectStatMessages(){
+    return []
+        .concat(genMonthIncomeCompare())
+        .concat(genWeekIncome())
+        .concat(genAvgPerClass())
+        .concat(genRemainingToday())
+        .concat(genHistoricalMax())
+        .concat(genBreakEven())
+        .concat(genNewStudentsThisMonth())
+        .concat(genOpenSlotsAndFillRate())
+        .concat(genTodayFirstLast())
+        .concat(genMonthlyGoal())
+        .concat(genBrandAnniversary())
+        .concat(genQuotes());
+}
+
+/* 有提醒訊息時「只」輪播提醒；完全沒有提醒時才輪播一般統計／金句 */
+function buildMarqueeQueue(){
+    let msgs = [];
+    try { msgs = collectReminderMessages(); } catch (e) { console.error(e); }
+    if (msgs.length) return msgs;
+    try { msgs = collectStatMessages(); } catch (e) { console.error(e); }
+    return msgs.length ? msgs : ['👋 歡迎回來！'];
+}
+
+/* ── 輪播／拖曳／收合控制 ── */
+let marqueeQueue = ['載入中…'];
+let marqueeIndex = 0;
+let marqueeTimer = null;
+let marqueeMode = (window.innerWidth <= 768) ? 'mini' : 'full'; // 'full' | 'mini' | 'closed'
+
+function renderMarqueeDots(){
+    const dots = document.getElementById('marqueeDots');
+    if (!dots) return;
+    if (marqueeQueue.length <= 1) { dots.innerHTML = ''; return; }
+    dots.innerHTML = marqueeQueue.map((_, i) => `<span class="dot${i === marqueeIndex ? ' active' : ''}"></span>`).join('');
+}
+
+function showMarqueeMessage(){
+    const el = document.getElementById('marqueeMsg');
+    if (!el) return;
+    el.classList.add('fading');
+    setTimeout(() => {
+        el.textContent = marqueeQueue[marqueeIndex] || '';
+        el.classList.remove('fading');
+        renderMarqueeDots();
+    }, 220);
+}
+
+function marqueeNext(){
+    if (!marqueeQueue.length) return;
+    marqueeIndex = (marqueeIndex + 1) % marqueeQueue.length;
+    if (marqueeIndex === 0) marqueeQueue = buildMarqueeQueue(); // 輪完一整輪，重新整理一次資料
+    showMarqueeMessage();
+    restartMarqueeTimer();
+}
+
+function restartMarqueeTimer(){
+    clearInterval(marqueeTimer);
+    marqueeTimer = setInterval(marqueeNext, 4000); // 每 4 秒切換下一則（3–5 秒區間取中間值）
+}
+
+function initMarquee(){
+    marqueeQueue = buildMarqueeQueue();
+    marqueeIndex = 0;
+    showMarqueeMessage();
+    restartMarqueeTimer();
+    applyMarqueeMode();
+}
+
+function applyMarqueeMode(){
+    const widget = document.getElementById('marqueeWidget');
+    const mini = document.getElementById('marqueeMiniIcon');
+    if (!widget || !mini) return;
+    if (marqueeMode === 'closed') { widget.style.display = 'none'; mini.style.display = 'none'; }
+    else if (marqueeMode === 'mini') { widget.style.display = 'none'; mini.style.display = 'flex'; }
+    else { widget.style.display = ''; mini.style.display = 'none'; }
+}
+function collapseMarqueeToMini(){ marqueeMode = 'mini'; applyMarqueeMode(); }
+function expandMarqueeFromMini(){ marqueeMode = 'full'; applyMarqueeMode(); }
+function closeMarquee(){ marqueeMode = 'closed'; clearInterval(marqueeTimer); applyMarqueeMode(); }
+
+/* 設定本月目標收入（依民國年度分別記錄，跟課表其他資料一起同步到 Firebase） */
+function editMonthlyGoal(){
+    const rocY = currentYear - ROC_YEAR_OFFSET;
+    const cur = monthlyGoals[rocY] || '';
+    const val = prompt(`設定民國${rocY}年度每月目標收入（NT$）：`, cur);
+    if (val === null) return;
+    const num = parseFloat(val);
+    if (isNaN(num) || num < 0) { alert('請輸入有效的數字'); return; }
+    monthlyGoals[rocY] = num;
+    if (typeof scheduleSave === 'function') scheduleSave();
+    marqueeQueue = buildMarqueeQueue();
+    marqueeIndex = 0;
+    showMarqueeMessage();
+}
+
+/* 讓懸浮卡可用滑鼠／觸控拖曳（拖標題列），拖曳後改用 left/top 定位（放開右側自動貼齊的預設值） */
+(function initMarqueeDrag(){
+    document.addEventListener('DOMContentLoaded', () => {
+        const widget = document.getElementById('marqueeWidget');
+        const header = document.getElementById('marqueeHeader');
+        if (!widget || !header) return;
+        let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+        function onDown(e){
+            dragging = true;
+            const evt = e.touches ? e.touches[0] : e;
+            startX = evt.clientX; startY = evt.clientY;
+            const rect = widget.getBoundingClientRect();
+            origLeft = rect.left; origTop = rect.top;
+            widget.style.left = origLeft + 'px';
+            widget.style.top = origTop + 'px';
+            widget.style.right = 'auto';
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+            document.addEventListener('touchmove', onMove, { passive: false });
+            document.addEventListener('touchend', onUp);
+        }
+        function onMove(e){
+            if (!dragging) return;
+            if (e.cancelable) e.preventDefault();
+            const evt = e.touches ? e.touches[0] : e;
+            const dx = evt.clientX - startX, dy = evt.clientY - startY;
+            widget.style.left = (origLeft + dx) + 'px';
+            widget.style.top = (origTop + dy) + 'px';
+        }
+        function onUp(){
+            dragging = false;
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            document.removeEventListener('touchmove', onMove);
+            document.removeEventListener('touchend', onUp);
+        }
+        header.addEventListener('mousedown', onDown);
+        header.addEventListener('touchstart', onDown, { passive: true });
+    });
+})();
+
+document.addEventListener('DOMContentLoaded', initMarquee);
+
+
 /* ============================================================
    表格鍵盤導覽：「實際收入紀錄」與「學生上課狀況／課程紀錄」共用
    - Enter／↓：跳到下一列同一欄；↑：跳到上一列同一欄
