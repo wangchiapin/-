@@ -1065,6 +1065,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
     <button class="tab-btn" data-tab="actual" onclick="switchTab('actual')">📋 實際收入紀錄</button>
     <button class="tab-btn" data-tab="students" onclick="switchTab('students')">🧑‍🎓 學生上課狀況</button>
     <button class="tab-btn" style="background:var(--forest-light); color:var(--forest-deep); margin-left:6px;" onclick="openAiModal()">✨ Gemini AI 分析</button>
+    <button class="tab-btn" id="exportAllBtn" style="background:var(--forest-deep); color:#fff; margin-left:6px;" onclick="exportAllSiteExcel()">📦 全站匯出</button>
 </div>
 
 <div class="color-popover" id="colorPopover" onclick="event.stopPropagation()">
@@ -4558,6 +4559,77 @@ function exportScheduleExcel(){
   downloadWorkbook(sheets, `華語課表_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
+/* ============================================================
+   📦 全站匯出：把「華語課表」「每日上課收入（全部月份）」
+   「實際收入與匯款紀錄」「學生上課狀況」「每月每年統計」五個分頁，
+   各自沿用該分頁原本「匯出 Excel」按鈕的邏輯（表格內容、樣式、
+   全部月份範圍等都跟各分頁單獨匯出時一模一樣），合併進同一個 .xlsx。
+   做法：暫時接管全域的 downloadWorkbook()，讓它把資料收集進陣列、
+   而不是真的下載，並在工作表名稱前加上分頁縮寫避免撞名；
+   每個分頁的資料收集完就立刻還原成原本的 downloadWorkbook，
+   最後才真正下載一次合併好的活頁簿。
+============================================================ */
+async function exportAllSiteExcel(){
+    const btn = document.getElementById('exportAllBtn');
+    const originalLabel = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ 匯出中...'; }
+
+    const allSheets = [];
+    const realDownloadWorkbook = downloadWorkbook;
+
+    /* 讓 downloadWorkbook 暫時變成「收集」而非「下載」，並替工作表名稱加前綴 */
+    function captureInto(prefix){
+        downloadWorkbook = async function(sheets){
+            (sheets || []).forEach(s => {
+                if (!s) return;
+                const name = (prefix + (s.name || 'Sheet')).slice(0, 31);
+                allSheets.push(Object.assign({}, s, { name }));
+            });
+        };
+    }
+
+    try {
+        if (typeof exportScheduleExcel === 'function') {
+            captureInto('課表-');
+            exportScheduleExcel();
+        }
+        if (typeof exportCalendarExcelAllMonths === 'function') {
+            captureInto('收入-');
+            exportCalendarExcelAllMonths();
+        }
+        if (typeof exportRecordsExcel === 'function') {
+            captureInto('');
+            exportRecordsExcel();
+        }
+        if (typeof stdExportExcel === 'function') {
+            captureInto('學生-');
+            stdExportExcel();
+        }
+        if (typeof exportStatsExcel === 'function') {
+            if (typeof renderStatsPageMonthly === 'function') renderStatsPageMonthly();
+            if (typeof renderStatsPageYearly === 'function') renderStatsPageYearly();
+            captureInto('統計-');
+            exportStatsExcel();
+        }
+    } catch (e) {
+        console.error(e);
+    } finally {
+        downloadWorkbook = realDownloadWorkbook;
+    }
+
+    if (!allSheets.length) {
+        if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
+        alert('目前沒有可以匯出的資料。');
+        return;
+    }
+
+    try {
+        await downloadWorkbook(allSheets, `每天一分鐘_全站資料匯出_${new Date().toISOString().slice(0,10)}.xlsx`);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
+    }
+}
+
 // ── 匯出圖片 ──
 function exportFreeImage(side){
   const isTW=(side==='tw');const lbl=isTW?'GMT+8':getTZLabel(currentTZ.tz,tzRefDate(currentTZ));
@@ -5541,13 +5613,14 @@ function genMissingPrepReminder(){
     return [`📝 備課資料待補齊（作業／下次進度空白）：${names.join('、')}`];
 }
 
-/* 累積堂數里程碑：10、30、50、100，之後每滿50堂提醒一次 */
+/* 累積堂數里程碑：10、30、50、100，之後每滿50堂提醒一次
+   計算方式：只算「課程進度」欄位有填寫內容的列，避免把剛新增、還沒實際上課的空白列也算進堂數 */
 function genClassCountMilestones(){
     const msgs = [];
     const exactThresholds = [10, 30, 50, 100];
     Object.keys(stdDb || {}).forEach(id => {
         const s = stdDb[id]; if (!s || s.isArchived) return;
-        const n = (s.classes || []).length;
+        const n = (s.classes || []).filter(c => c && c.progress && c.progress.trim() !== '').length;
         const hit = exactThresholds.includes(n) ? n : ((n > 100 && n % 50 === 0) ? n : null);
         if (hit) {
             const name = (s.basic && s.basic.name) || '未命名學生';
