@@ -3487,6 +3487,15 @@ ${monthLines.join('\n') || '（尚無資料）'}
     let dailyIncomeUnsub = null;
     let dailyIncomeSaveTimer = null;
     let dailyIncomeMigrationDone = false;
+    /* 是否已經至少確認收到過一次雲端最新版本（含剛完成搬遷上傳的情況）。
+       在這之前，本機的 incomeData／studentData 可能只是瀏覽器快取的舊版本，
+       絕對不能貿然存回雲端——不然像「華語課表」渲染時觸發的
+       syncStudentsFromSchedule() 這類跟日曆資料無關的自動存檔，
+       會把整份文件（含 classIncomeData）用舊快取整個覆蓋掉，
+       蓋掉這段時間其他裝置新增的日曆紀錄。還沒讀到雲端最新版本前，
+       存檔請求一律先記下來（dailyIncomePendingFlush），等資料到了再補存一次。 */
+    let dailyIncomeCloudLoaded = false;
+    let dailyIncomePendingFlush = false;
 
     function dailyIncomeDocRef(){
         if (!window.ledgerUid) return null;
@@ -3496,6 +3505,11 @@ ${monthLines.join('\n') || '（尚無資料）'}
     function dailyIncomeSaveNow(){
         const ref = dailyIncomeDocRef();
         if (!ref) return;
+        if (!dailyIncomeCloudLoaded) {
+            // 還沒確認拿到雲端最新版本，先記住稍後要補存，不能現在就寫（避免覆蓋掉雲端較新的資料）
+            dailyIncomePendingFlush = true;
+            return;
+        }
         window.firebaseSetDoc(ref, { studentFeeData: studentData, classIncomeData: incomeData, updatedAt: Date.now() })
             .catch(e => console.error('每日上課收入 雲端儲存失敗', e));
     }
@@ -3529,13 +3543,19 @@ ${monthLines.join('\n') || '（尚無資料）'}
                 if (d.studentFeeData) { studentData = d.studentFeeData; localStorage.setItem('studentFeeData', JSON.stringify(studentData)); }
                 if (d.classIncomeData) { incomeData = d.classIncomeData; localStorage.setItem('classIncomeData', JSON.stringify(incomeData)); }
             }
+            // 這是第一次確認收到「伺服器已確認」的版本，之後本機資料才真的可信、可以安全存回雲端
+            dailyIncomeCloudLoaded = true;
             if (typeof renderStudents === 'function') renderStudents();
             if (typeof renderCalendar === 'function') renderCalendar();
+            // 剛才在還沒讀到雲端資料前，有存檔請求被擋下來過 → 現在資料已經是最新的了，補存一次
+            if (dailyIncomePendingFlush) { dailyIncomePendingFlush = false; dailyIncomeSave(); }
         }, err => console.error('[每日上課收入] 雲端監聽失敗', err));
     }
     function stopDailyIncomeCloudSync(){
         if (dailyIncomeUnsub) { dailyIncomeUnsub(); dailyIncomeUnsub = null; }
         dailyIncomeMigrationDone = false;
+        dailyIncomeCloudLoaded = false;
+        dailyIncomePendingFlush = false;
     }
 
     /* ============================================================
