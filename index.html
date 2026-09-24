@@ -3932,6 +3932,13 @@ function getStudents(){
 }
 
 function sessionCount(name){return Object.values(schedule).filter(e=>e&&e.name===name).length;}
+// 堂數的「時數」版本：只用在畫面顯示（例如「學生收費設定」表的每週堂數欄），
+// 1.5 小時的課就算 1.5 堂；收費計算（每堂收費 × 堂數）完全不用這個，還是維持用 sessionCount()
+// 那種「固定金額、一筆課算一堂」的算法，避免影響「每日上課收入」那邊的學生收費設定。
+function sessionHours(name){
+  const total=Object.values(schedule).filter(e=>e&&e.name===name).reduce((s,e)=>s+entryDurMin(e)/60,0);
+  return Math.round(total*2)/2; // 課程長度本來就是30分鐘的倍數，四捨五入到最接近的0.5避免浮點數誤差
+}
 
 function isUnstable(name){return !!unstable[name];}
 
@@ -4303,7 +4310,7 @@ function renderIncomeTable(){
   const tbody=document.getElementById('rate-body');const tfoot=document.getElementById('rate-foot');
   tbody.innerHTML='';let weeklyTotal=0;
   Object.entries(students).forEach(([name,color])=>{
-    const c=COLORS[color]||COLORS.forest;const cnt=sessionCount(name);const rate=rates[name]||0;
+    const c=COLORS[color]||COLORS.forest;const cnt=sessionCount(name);const hrs=sessionHours(name);const rate=rates[name]||0;
     const weekly=cnt*rate;const monthly=weekly*MONTHLY_MULT;weeklyTotal+=weekly;
     const info=studentInfo[name]||{};
     const twText=getStudentTWTimeText(name);
@@ -4316,17 +4323,17 @@ function renderIncomeTable(){
       <td class="local-time-cell" style="color:var(--forest-bark)">${localText||(info.nat?'（無法解析時間）':'（請先選國籍）')}</td>
       <td class="num"><input class="origfee-input" type="text" placeholder="例：21美金" value="${(info.origFee||'').replace(/"/g,'&quot;')}" data-name="${name}"/></td>
       <td class="num"><input class="rate-input" type="number" min="0" step="100" value="${rate}" data-name="${name}"/></td>
-      <td class="num">${cnt}</td>
+      <td class="num">${hrs}</td>
       <td class="num">${weekly>0?'NT$ '+weekly.toLocaleString():'—'}</td>
       <td class="num">${monthly>0?'NT$ '+monthly.toLocaleString():'—'}</td>
       <td style="text-align:center"><input class="unstable-checkbox" type="checkbox" data-name="${name}" ${isUnstable(name)?'checked':''} title="上課狀況不固定，計算「預估最低收入」時排除這位學生"/></td>
       <td style="text-align:center"><button class="btn-mini-delete" onclick="retireStudent('${name.replace(/'/g,"\\'")}')" title="標記為不再上課">刪除</button></td>`;
     tbody.appendChild(tr);
   });
-  const totalSessions=Object.keys(students).reduce((a,n)=>a+sessionCount(n),0);
+  const totalHours=Object.keys(students).reduce((a,n)=>a+sessionHours(n),0);
   const monthlyTotal=weeklyTotal*MONTHLY_MULT;
   tfoot.innerHTML=`<tr><td></td><td style="font-weight:700">合計</td><td></td><td></td><td></td><td></td><td></td>
-    <td class="num" style="font-weight:700">${totalSessions}</td>
+    <td class="num" style="font-weight:700">${totalHours}</td>
     <td class="num" style="font-weight:700">${weeklyTotal>0?'NT$ '+weeklyTotal.toLocaleString():'—'}</td>
     <td class="num" style="font-weight:700">${monthlyTotal>0?'NT$ '+monthlyTotal.toLocaleString():'—'}</td>
     <td></td><td></td></tr>`;
