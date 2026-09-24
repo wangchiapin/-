@@ -867,9 +867,13 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 #scheduleTab table.sched td.cell:hover{background:var(--forest-gold-pale)}
 #scheduleTab table.sched td.cell.mirror, #scheduleTab table.sched td.cell.free-cell{cursor:default}
 #scheduleTab table.sched td.cell.mirror:hover{background:var(--forest-card)}
+#scheduleTab table.sched td.cell.covered{cursor:pointer}
+#scheduleTab table.sched td.cell.mirror.covered{cursor:default}
 #scheduleTab .chip{border-radius:6px;padding:2px 4px;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1px;position:relative;overflow:hidden}
+#scheduleTab .chip.spanning{box-shadow:0 0 0 1px var(--forest-card) inset}
 #scheduleTab .chip .name{font-size:9px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;width:100%}
 #scheduleTab .chip .rate-tag{font-size:8px;opacity:0.75;white-space:nowrap}
+#scheduleTab .chip .time-tag{font-size:8px;opacity:0.75;white-space:nowrap}
 #scheduleTab .chip .del{position:absolute;top:1px;right:2px;font-size:8px;cursor:pointer;opacity:0;transition:opacity 0.15s;background:none;border:none;color:inherit;padding:0;line-height:1}
 #scheduleTab .chip:hover .del{opacity:1}
 #scheduleTab .chip.mirror-chip{opacity:0.75}
@@ -3629,8 +3633,8 @@ function scheduleDocRef(){
 
 // ── 常數 ──
 const DAYS=['一','二','三','四','五','六','日']; // 0=週一 … 6=週日
-// 台灣課表：07:00–22:00
-const TW_HOURS=[];for(let h=7;h<22;h++)TW_HOURS.push(h);
+// 台灣課表：07:00–22:00（會依實際課程長度動態延伸，見 rebuildTWHours）
+let TW_HOURS=[];for(let h=7;h<22;h++)TW_HOURS.push(h);
 // 對照課表：顯示 15 格，以換算後時間為中心（00–23 全覆蓋用，渲染時過濾）
 const OT_HOURS=[];for(let h=0;h<24;h++)OT_HOURS.push(h);
 const MONTHLY_MULT=4;
@@ -3744,14 +3748,18 @@ function isTZCurrentlyDST(tz){
   return offNow>offFuture;
 }
 
-function twToOt(di,h){
-  const twTotal=di*1440+h*60;
+/* 精準到分鐘的版本：回傳換算後的星期（otDi）跟「當天第幾分鐘」（otAbsMin，0~1439） */
+function twToOtAbs(di,h,startMin){
+  const twTotal=di*1440+h*60+(startMin||0);
   const otTotal=twTotal+diffMin;
-  const WEEK=7*1440; 
-  let otDi=Math.floor(((otTotal%WEEK)+WEEK)%WEEK/1440);
-  const otMinInDay=((otTotal%1440)+1440)%1440;
-  const otH=Math.floor(otMinInDay/60);
-  return{di:otDi,h:otH};
+  const WEEK=7*1440;
+  const otDi=Math.floor(((otTotal%WEEK)+WEEK)%WEEK/1440);
+  const otAbsMin=((otTotal%1440)+1440)%1440;
+  return{di:otDi,absMin:otAbsMin};
+}
+function twToOt(di,h){
+  const{di:otDi,absMin}=twToOtAbs(di,h,0);
+  return{di:otDi,h:Math.floor(absMin/60)};
 }
 
 function getOTDisplayHours(){
@@ -3760,8 +3768,15 @@ function getOTDisplayHours(){
     const entry=schedule[key];
     if(!entry||!entry.name)return;
     const[h,di]=key.split('_').map(Number);
-    const{h:otH}=twToOt(di,h);
-    otHours.add(otH);
+    if(entry.name==='X'){
+      const{h:otH}=twToOt(di,h);
+      otHours.add(otH);
+      return;
+    }
+    const{absMin}=twToOtAbs(di,h,entryStartMin(entry));
+    const firstH=Math.floor(absMin/60);
+    const lastH=Math.min(23,Math.ceil((absMin+entryDurMin(entry))/60)-1);
+    for(let hh=firstH;hh<=lastH;hh++)otHours.add(hh);
   });
   if(otHours.size===0){
     const{h:minH}=twToOt(0,7);
@@ -3829,7 +3844,63 @@ function fmtDiff(d){const s=d>=0?'+':'-';const a=Math.abs(d);return s+Math.floor
 // 精簡格式（無冒號），用於「學生收費設定」表的台灣時間／當地時間欄位，例如 "三 1000-1100"
 function fmtHMCompact(totalMin){const m=((totalMin%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+String(m%60).padStart(2,'0');}
 function cellKey(h,di){return h+'_'+di;}
-function isBusy(h,di){const e=schedule[cellKey(h,di)];return !!(e&&e.name);}
+
+/* ============================================================
+   課程長度／半點開始時間 支援：
+   每筆課表資料 schedule[key] 除了 {name,color}，現在多了
+   startMin（0 或 30，該堂課在「起始格」那小時內的開始分鐘）跟
+   durationMin（課程總長度，分鐘，30 的倍數，例如 90 = 1.5小時）。
+   舊資料沒有這兩個欄位就當作 startMin=0、durationMin=60（完全相容）。
+   「❌ 請假」的 X 記號固定維持 1 小時整點，不套用這套邏輯。
+============================================================ */
+function entryStartMin(e){return (e&&e.startMin===30)?30:0;}
+function entryDurMin(e){return (e&&e.durationMin>0)?e.durationMin:60;}
+function entryIsStandard(e){return entryStartMin(e)===0&&entryDurMin(e)===60;}
+function entryAbsStart(h,e){return h*60+entryStartMin(e);}
+function entryAbsEnd(h,e){return entryAbsStart(h,e)+entryDurMin(e);}
+/* 這堂課（從 h 這格開始）視覺上會蓋到的所有整點格子（含自己這格） */
+function entrySpanHours(h,e){
+  const endAbs=entryAbsEnd(h,e);
+  const last=Math.ceil(endAbs/60)-1;
+  const hours=[];
+  for(let hh=h;hh<=last;hh++)hours.push(hh);
+  return hours;
+}
+function fmtRangeEntry(h,e){return fmtHM(entryAbsStart(h,e))+'–'+fmtHM(entryAbsEnd(h,e));}
+
+/* 找出「某天、某小時」這一格目前是被誰佔用：
+   - 如果那一格本身就是某堂課的起始格，回傳 isAnchor:true
+   - 如果是被更早開始、時間比較長的課「延續」蓋過來的，回傳 isAnchor:false，
+     並附上 anchorH（真正的起始小時），方便點擊時導去編輯那一筆 */
+function findCoveringEntry(h,di){
+  const direct=schedule[cellKey(h,di)];
+  if(direct&&direct.name)return{entry:direct,anchorH:h,isAnchor:true};
+  for(let hh=h-1;hh>=Math.max(0,h-8);hh--){
+    const e=schedule[cellKey(hh,di)];
+    if(e&&e.name&&e.name!=='X'&&entrySpanHours(hh,e).includes(h))return{entry:e,anchorH:hh,isAnchor:false};
+  }
+  return null;
+}
+function isBusy(h,di){return !!findCoveringEntry(h,di);}
+
+/* 時間軸動態延伸：預設 07:00–22:00（h=7~21）；只要有課程實際會用到更晚的時段，
+   就自動往下多加格子；那堂課被刪掉或縮短之後，下次重新計算就會自動變回預設範圍。 */
+function computeTWMaxHour(){
+  let maxEnd=22*60;
+  Object.entries(schedule).forEach(([key,e])=>{
+    if(!e||!e.name||e.name==='X')return;
+    const h=Number(key.split('_')[0]);
+    const end=entryAbsEnd(h,e);
+    if(end>maxEnd)maxEnd=end;
+  });
+  return Math.max(21,Math.ceil(maxEnd/60)-1);
+}
+function rebuildTWHours(){
+  const maxH=computeTWMaxHour();
+  TW_HOURS.length=0;
+  for(let h=7;h<=maxH;h++)TW_HOURS.push(h);
+}
+
 
 function getStudents(){
   const map={};
@@ -3889,24 +3960,35 @@ function minIncomePerDay(di){
 }
 
 // ── 對照時區映射 ──
+/* otMap[otDi][otH] = 一個陣列，每個元素 {entry, isAnchor, anchorOtH, otStartMin, durationMin}
+   isAnchor=true 代表這格是這堂課換算過來的「起始格」，其餘是被延續蓋到的格子 */
 function buildOTMap(){
   const otMap={};for(let di=0;di<7;di++)otMap[di]={};
   Object.entries(schedule).forEach(([key,entry])=>{
     if(!entry||!entry.name)return;
     const[h,di]=key.split('_').map(Number);
-    const{di:otDi,h:otH}=twToOt(di,h);
-    if(!otMap[otDi][otH])otMap[otDi][otH]=[];
-    otMap[otDi][otH].push(entry);
+    if(entry.name==='X'){
+      const{di:otDi,h:otH}=twToOt(di,h);
+      if(!otMap[otDi][otH])otMap[otDi][otH]=[];
+      otMap[otDi][otH].push({entry,isAnchor:true,anchorOtH:otH,otStartMin:0,durationMin:60});
+      return;
+    }
+    const{di:otDi,absMin}=twToOtAbs(di,h,entryStartMin(entry));
+    const durMin=entryDurMin(entry);
+    const firstH=Math.floor(absMin/60);
+    const lastH=Math.min(23,Math.ceil((absMin+durMin)/60)-1);
+    for(let hh=firstH;hh<=lastH;hh++){
+      if(!otMap[otDi][hh])otMap[otDi][hh]=[];
+      otMap[otDi][hh].push({entry,isAnchor:hh===firstH,anchorOtH:firstH,otStartMin:absMin%60,durationMin:durMin});
+    }
   });
   return otMap;
 }
 function buildOTBusyMap(){
   const busyMap={};for(let di=0;di<7;di++)busyMap[di]={};
-  Object.keys(schedule).forEach(key=>{
-    const e=schedule[key];if(!e||!e.name)return;
-    const[h,di]=key.split('_').map(Number);
-    const{di:otDi,h:otH}=twToOt(di,h);
-    busyMap[otDi][otH]=true;
+  const otMap=buildOTMap();
+  Object.keys(otMap).forEach(di=>{
+    Object.keys(otMap[di]).forEach(h=>{busyMap[di][h]=true;});
   });
   return busyMap;
 }
@@ -4045,6 +4127,7 @@ function renderHead(tid){
 }
 
 function renderSched(){
+  rebuildTWHours();
   ['tw-thead','ot-thead','free-tw-thead','free-ot-thead'].forEach(renderHead);
   renderTWBody('tw-tbody');
   renderOTBody('ot-tbody');
@@ -4055,6 +4138,17 @@ function renderSched(){
   renderLegend();renderIncomeTable();renderDayGrid();schedRenderSummary();
 }
 
+/* 課程長度／半點開始 造成「一堂課視覺上蓋過不只一格」時的通用 style 字串：
+   standard（整點開始、剛好 1 小時）維持原本的排版（不用 position:absolute），
+   否則改成絕對定位、依實際起訖時間精算高度，蓋過去的格子文字內容留空。
+   ROW_H 要跟 CSS 裡 td.cell 的 height（44px）一致。 */
+const SCHED_ROW_H=44;
+function spanCardStyle(h,e){
+  const top=Math.round(entryStartMin(e)/60*SCHED_ROW_H);
+  const height=Math.max(SCHED_ROW_H-4,Math.round(entryDurMin(e)/60*SCHED_ROW_H)-4);
+  return`position:absolute;left:2px;right:2px;top:${top}px;height:${height}px;z-index:3;`;
+}
+
 // ── 台灣課表 ──
 function renderTWBody(tid){
   const tbody=document.getElementById(tid);tbody.innerHTML='';
@@ -4063,23 +4157,44 @@ function renderTWBody(tid){
     const td=document.createElement('td');td.className='time-col';td.textContent=fmtRangeTW(h);tr.appendChild(td);
     DAYS.forEach((_,di)=>{
       const cell=document.createElement('td');cell.className='cell';
-      const key=cellKey(h,di);const entry=schedule[key];
-      if(entry&&entry.name){
-        if(entry.name === 'X') {
+      const key=cellKey(h,di);
+      const cov=findCoveringEntry(h,di);
+      if(!cov){
+        cell.innerHTML='<div class="plus">+</div>';
+        cell.onclick=()=>openModal(h,di,key);
+      }else if(!cov.isAnchor){
+        // 被更早開始、時間比較長的課「延續」蓋過來的格子：畫面上留空（由前一格的卡片蓋過來），
+        // 點擊會導去編輯真正的起始那一筆，匯出 Excel 時這一格文字也是空白的
+        cell.className='cell covered';
+        cell.onclick=()=>openModal(cov.anchorH,di,cellKey(cov.anchorH,di));
+      }else{
+        const entry=cov.entry;
+        if(entry.name==='X'){
           cell.innerHTML=`<div class="chip" style="background:#efece0;color:#8a8072;border:1px dashed #c9bfa0">
             <span class="name">❌</span>
             <button class="del" onclick="deleteEntry(event,'${key}')">✕</button>
           </div>`;
-        } else {
+        }else{
           const c=COLORS[entry.color]||COLORS.forest;const rv=rates[entry.name]||0;
-          cell.innerHTML=`<div class="chip" style="background:${c.bg};color:${c.text}">
-            <span class="name">${entry.name}</span>
-            ${rv>0?'<span class="rate-tag">NT$'+rv.toLocaleString()+'</span>':''}
-            <button class="del" onclick="deleteEntry(event,'${key}')">✕</button>
-          </div>`;
+          const standard=entryIsStandard(entry);
+          if(standard){
+            cell.innerHTML=`<div class="chip" style="background:${c.bg};color:${c.text}">
+              <span class="name">${entry.name}</span>
+              ${rv>0?'<span class="rate-tag">NT$'+rv.toLocaleString()+'</span>':''}
+              <button class="del" onclick="deleteEntry(event,'${key}')">✕</button>
+            </div>`;
+          }else{
+            cell.style.position='relative';
+            cell.innerHTML=`<div class="chip spanning" style="background:${c.bg};color:${c.text};${spanCardStyle(h,entry)}">
+              <span class="name">${entry.name}</span>
+              ${rv>0?'<span class="rate-tag">NT$'+rv.toLocaleString()+'</span>':''}
+              <span class="time-tag">${fmtRangeEntry(h,entry)}</span>
+              <button class="del" onclick="deleteEntry(event,'${key}')">✕</button>
+            </div>`;
+          }
         }
-      }else{cell.innerHTML='<div class="plus">+</div>';}
-      cell.onclick=()=>openModal(h,di,key);
+        cell.onclick=()=>openModal(h,di,key);
+      }
       tr.appendChild(cell);
     });
     tbody.appendChild(tr);
@@ -4097,18 +4212,34 @@ function renderOTBody(tid){
     DAYS.forEach((_,otDi)=>{
       const cell=document.createElement('td');cell.className='cell mirror';
       const entries=otMap[otDi]&&otMap[otDi][h]?otMap[otDi][h]:[];
-      if(entries.length>0){
-        const entry=entries[0];
-        if(entry.name === 'X') {
+      const anchor=entries.find(x=>x.isAnchor);
+      const cont=!anchor&&entries.length>0?entries[0]:null;
+      if(anchor){
+        const entry=anchor.entry;
+        if(entry.name==='X'){
           cell.innerHTML=`<div class="chip mirror-chip" style="background:#efece0;color:#8a8072;border:1px dashed #c9bfa0">
             <span class="name">❌</span>
           </div>`;
-        } else {
+        }else{
           const c=COLORS[entry.color]||COLORS.forest;
-          cell.innerHTML=`<div class="chip mirror-chip" style="background:${c.bg};color:${c.text}">
-            <span class="name">${entry.name}</span>
-          </div>`;
+          const standard=entryIsStandard(entry);
+          if(standard){
+            cell.innerHTML=`<div class="chip mirror-chip" style="background:${c.bg};color:${c.text}">
+              <span class="name">${entry.name}</span>
+            </div>`;
+          }else{
+            cell.style.position='relative';
+            const top=Math.round(anchor.otStartMin/60*SCHED_ROW_H);
+            const height=Math.max(SCHED_ROW_H-4,Math.round(anchor.durationMin/60*SCHED_ROW_H)-4);
+            cell.innerHTML=`<div class="chip mirror-chip spanning" style="background:${c.bg};color:${c.text};position:absolute;left:2px;right:2px;top:${top}px;height:${height}px;z-index:3;">
+              <span class="name">${entry.name}</span>
+              <span class="time-tag">${fmtHM(h*60+anchor.otStartMin)}–${fmtHM(h*60+anchor.otStartMin+anchor.durationMin)}</span>
+            </div>`;
+          }
         }
+      }else if(cont){
+        // 被延續蓋過來的格子：留空，由前一格的卡片蓋過來
+        cell.className='cell mirror covered';
       }
       tr.appendChild(cell);
     });
@@ -4685,18 +4816,68 @@ function exportFreeImage(side){
 function openModal(h,di,key){
   currentCell={h,di,key};const e=schedule[key]||{};
   const opts=COLOR_KEYS.map(k=>`<option value="${k}"${(e.color||'forest')===k?' selected':''}>${k}</option>`).join('');
+  const startMin=entryStartMin(e);
+  const durationMin=entryDurMin(e);
+  const isPreset=durationMin===60||durationMin===90||durationMin===120;
+  const hh=String(h).padStart(2,'0');
   document.getElementById('modal-mount').innerHTML=`<div class="modal-overlay"><div class="modal">
     <h3>${e.name?'編輯學生':'新增學生'}</h3>
     <label>學生姓名</label><input type="text" id="m-name" placeholder="請輸入姓名" value="${e.name||''}"/>
     <label>顏色標記</label><select id="m-color">${opts}</select>
+    <label>開始時間</label><select id="m-start">
+      <option value="0"${startMin===0?' selected':''}>${hh}:00</option>
+      <option value="30"${startMin===30?' selected':''}>${hh}:30</option>
+    </select>
+    <label>課程長度</label><select id="m-dur" onchange="onDurChange()">
+      <option value="60"${durationMin===60?' selected':''}>1小時</option>
+      <option value="90"${durationMin===90?' selected':''}>1.5小時</option>
+      <option value="120"${durationMin===120?' selected':''}>2小時</option>
+      <option value="custom"${!isPreset?' selected':''}>其他</option>
+    </select>
+    <div id="m-dur-custom-wrap" style="display:${!isPreset?'block':'none'};margin-top:6px;">
+      <label>自訂長度（分鐘，30的倍數）</label><input type="number" id="m-dur-custom" min="30" step="30" value="${!isPreset?durationMin:90}"/>
+    </div>
     <div class="modal-btns"><button onclick="closeModal()">取消</button><button class="primary" onclick="saveEntry()">儲存</button></div>
   </div></div>`;
   setTimeout(()=>document.getElementById('m-name').focus(),50);
 }
+function onDurChange(){
+  const v=document.getElementById('m-dur').value;
+  const wrap=document.getElementById('m-dur-custom-wrap');
+  if(wrap)wrap.style.display=(v==='custom')?'block':'none';
+}
 function closeModal(){document.getElementById('modal-mount').innerHTML='';currentCell=null;}
 function saveEntry(){
-  if(!currentCell)return;const name=document.getElementById('m-name').value.trim();if(!name){alert('請輸入學生姓名');return;}
-  schedule[currentCell.key]={name,color:document.getElementById('m-color').value};closeModal();renderSched();scheduleSave();
+  if(!currentCell)return;
+  const name=document.getElementById('m-name').value.trim();
+  if(!name){alert('請輸入學生姓名');return;}
+  const color=document.getElementById('m-color').value;
+  if(name==='X'){
+    // 「❌ 請假」標記維持原本的整點單一格邏輯，不套用課程長度
+    schedule[currentCell.key]={name:'X'};
+    closeModal();renderSched();scheduleSave();
+    return;
+  }
+  const startMin=parseInt(document.getElementById('m-start').value,10)===30?30:0;
+  const durSel=document.getElementById('m-dur').value;
+  let durationMin=durSel==='custom'?parseInt(document.getElementById('m-dur-custom').value,10):parseInt(durSel,10);
+  if(!durationMin||durationMin<30)durationMin=60;
+  durationMin=Math.round(durationMin/30)*30; // 強制卡在 30 分鐘刻度
+
+  const di=currentCell.di,h=currentCell.h;
+  const newStart=h*60+startMin,newEnd=newStart+durationMin;
+  let conflict=false;
+  Object.entries(schedule).forEach(([k,ent])=>{
+    if(k===currentCell.key||!ent||!ent.name||ent.name==='X')return;
+    const[kh,kdi]=k.split('_').map(Number);
+    if(kdi!==di)return;
+    const s=entryAbsStart(kh,ent),en=entryAbsEnd(kh,ent);
+    if(newStart<en&&s<newEnd)conflict=true;
+  });
+  if(conflict){alert('這個時間跟同一天的另一堂課重疊了，請調整開始時間或課程長度');return;}
+
+  schedule[currentCell.key]={name,color,startMin,durationMin};
+  closeModal();renderSched();scheduleSave();
 }
 function deleteEntry(e,key){e.stopPropagation();delete schedule[key];renderSched();scheduleSave();}
 function clearAll(){if(confirm('確定要清空整張課表嗎？')){schedule={};rates={};renderSched();scheduleSave();}}
@@ -5817,8 +5998,7 @@ function genOpenSlotsAndFillRate(){
     for (let di = 0; di < 7; di++) {
         TW_HOURS.forEach(h => {
             total++;
-            const e = schedule[cellKey(h, di)];
-            if (e && e.name && e.name !== 'X') busy++;
+            if (isBusy(h, di)) busy++;
         });
     }
     const open = total - busy;
@@ -5834,10 +6014,12 @@ function genTodayFirstLast(){
     if (typeof schedule === 'undefined' || typeof TW_HOURS === 'undefined') return [];
     const now = new Date();
     const di = (now.getDay() + 6) % 7;
-    const hours = TW_HOURS.filter(h => { const e = schedule[cellKey(h, di)]; return e && e.name && e.name !== 'X'; });
-    if (!hours.length) return [`😌 今天沒有排課，好好休息一下！`];
-    const first = Math.min(...hours), last = Math.max(...hours);
-    return [`⏱ 今天課程時間：${String(first).padStart(2, '0')}:00 - ${String(last + 1).padStart(2, '0')}:00`];
+    const todays = Object.entries(schedule)
+        .filter(([k, e]) => e && e.name && e.name !== 'X' && Number(k.split('_')[1]) === di)
+        .map(([k, e]) => { const h = Number(k.split('_')[0]); return { start: entryAbsStart(h, e), end: entryAbsEnd(h, e) }; });
+    if (!todays.length) return [`😌 今天沒有排課，好好休息一下！`];
+    const first = Math.min(...todays.map(t => t.start)), last = Math.max(...todays.map(t => t.end));
+    return [`⏱ 今天課程時間：${fmtHM(first)} - ${fmtHM(last)}`];
 }
 
 /* 本月目標收入（🎯 按鈕可設定，依民國年度分別記錄） */
