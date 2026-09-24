@@ -54,14 +54,41 @@ function visualStyleFromEl(cell) {
    - <input> 其他類型 → 目前輸入的值
    - <select> → 目前選到的文字
    - 其餘 → 該儲存格的純文字（並盡量取得背景色／文字顏色／粗體／對齊）
-   遇到 colspan 會在 Excel 對應位置合併儲存格，維持欄位對齊 */
+   遇到 colspan 會在 Excel 對應位置合併儲存格，維持欄位對齊。
+   遇到 rowspan（例如課表裡一堂跨兩小時的課用 rowspan="2" 呈現）：Excel 不做合併，
+   而是在被蓋住的那幾列、對應欄位補一個空白儲存格，維持後面欄位對齊、內容留空
+   （不用真的合併，跟畫面上「下一列留空」的呈現方式一致）。 */
 function tableToStyledRows(table) {
     if (!table) return { rows: [], colWidths: [] };
+    // 欄寬／總欄數：抓第一列（通常是表頭，不會被更早的列的 rowspan 蓋到）每格的實際顯示寬度換算成 Excel 字元寬度
+    const colWidths = [];
+    const firstRow = table.querySelector('tr');
+    let totalCols = 0;
+    if (firstRow) {
+        firstRow.querySelectorAll('th,td').forEach(cell => {
+            const span = Math.max(1, parseInt(cell.getAttribute('colspan') || '1', 10));
+            const w = Math.max(6, Math.round((cell.offsetWidth || 90) / span / 7));
+            for (let i = 0; i < span; i++) colWidths.push(w);
+        });
+        totalCols = colWidths.length;
+    }
+
     const rows = [];
-    let maxCols = 0;
+    const pending = {}; // 欄位 index → 還要跳過幾列（被更早那一列的 rowspan 蓋住，這幾列在這個欄位不會有實際 <td>）
     table.querySelectorAll('tr').forEach(tr => {
+        const domCells = Array.from(tr.querySelectorAll('th,td'));
         const rowCells = [];
-        tr.querySelectorAll('th,td').forEach(cell => {
+        let col = 0, domIdx = 0;
+        const limit = totalCols || Infinity;
+        while (col < limit && (domIdx < domCells.length || pending[col] > 0)) {
+            if (pending[col] > 0) {
+                rowCells.push({ v: '', colspan: 1, bg: null, color: null, bold: false, halign: 'left' });
+                pending[col]--;
+                col++;
+                continue;
+            }
+            if (domIdx >= domCells.length) break;
+            const cell = domCells[domIdx++];
             let text = '';
             const input = cell.querySelector('input');
             const select = cell.querySelector('select');
@@ -74,21 +101,15 @@ function tableToStyledRows(table) {
             }
             const style = visualStyleFromEl(cell);
             const span = Math.max(1, parseInt(cell.getAttribute('colspan') || '1', 10));
+            const rowspan = Math.max(1, parseInt(cell.getAttribute('rowspan') || '1', 10));
             rowCells.push({ v: text, colspan: span, ...style });
-        });
-        maxCols = Math.max(maxCols, rowCells.reduce((s, c) => s + c.colspan, 0));
+            if (rowspan > 1) {
+                for (let i = 0; i < span; i++) pending[col + i] = Math.max(pending[col + i] || 0, rowspan - 1);
+            }
+            col += span;
+        }
         rows.push(rowCells);
     });
-    // 欄寬：抓第一列（通常是表頭）每格的實際顯示寬度換算成 Excel 字元寬度
-    const colWidths = [];
-    const firstRow = table.querySelector('tr');
-    if (firstRow) {
-        firstRow.querySelectorAll('th,td').forEach(cell => {
-            const span = Math.max(1, parseInt(cell.getAttribute('colspan') || '1', 10));
-            const w = Math.max(6, Math.round((cell.offsetWidth || 90) / span / 7));
-            for (let i = 0; i < span; i++) colWidths.push(w);
-        });
-    }
     return { rows, colWidths };
 }
 
@@ -4139,37 +4160,23 @@ function renderSched(){
   renderLegend();renderIncomeTable();renderDayGrid();schedRenderSummary();
 }
 
-/* 課程長度／半點開始 造成「一堂課視覺上蓋過不只一格」時的通用 style 字串：
-   standard（整點開始、剛好 1 小時）維持原本的排版（不用 position:absolute），
-   否則改成絕對定位、依實際起訖時間精算高度，蓋過去的格子文字內容留空。
-   ROW_H 要跟 CSS 裡 td.cell 的 height（44px）一致。 */
-const SCHED_ROW_H=44;
-function spanCardStyle(h,e){
-  const top=Math.round(entryStartMin(e)/60*SCHED_ROW_H);
-  const height=Math.max(SCHED_ROW_H-4,Math.round(entryDurMin(e)/60*SCHED_ROW_H)-4);
-  return`position:absolute;left:2px;right:2px;top:${top}px;height:${height}px;z-index:3;`;
-}
-
 // ── 台灣課表 ──
+// 課程長度超過 1 小時／半點開始時，改用表格原生的 rowspan 讓卡片真正「跨列」，
+// 交給瀏覽器自己排版、保證跟格線完全貼齊，不用自己算高度。
 function renderTWBody(tid){
   const tbody=document.getElementById(tid);tbody.innerHTML='';
+  const skip=new Array(DAYS.length).fill(0); // 每個星期欄位，還要跳過幾列（被前一列的 rowspan 蓋住）
   TW_HOURS.forEach(h=>{
     const tr=document.createElement('tr');
     const td=document.createElement('td');td.className='time-col';td.textContent=fmtRangeTW(h);tr.appendChild(td);
     DAYS.forEach((_,di)=>{
-      const cell=document.createElement('td');cell.className='cell';
+      if(skip[di]>0){skip[di]--;return;} // 被 rowspan 蓋住的格子完全不輸出 <td>，交給上面那個 rowspan 儲存格涵蓋
       const key=cellKey(h,di);
-      const cov=findCoveringEntry(h,di);
-      if(!cov){
-        cell.innerHTML='<div class="plus">+</div>';
-        cell.onclick=()=>openModal(h,di,key);
-      }else if(!cov.isAnchor){
-        // 被更早開始、時間比較長的課「延續」蓋過來的格子：畫面上留空（由前一格的卡片蓋過來），
-        // 點擊會導去編輯真正的起始那一筆，匯出 Excel 時這一格文字也是空白的
-        cell.className='cell covered';
-        cell.onclick=()=>openModal(cov.anchorH,di,cellKey(cov.anchorH,di));
-      }else{
-        const entry=cov.entry;
+      const entry=schedule[key];
+      const cell=document.createElement('td');cell.className='cell';
+      if(entry&&entry.name){
+        const span=entrySpanHours(h,entry).length;
+        if(span>1){cell.rowSpan=span;skip[di]=span-1;}
         if(entry.name==='X'){
           cell.innerHTML=`<div class="chip" style="background:#efece0;color:#8a8072;border:1px dashed #c9bfa0">
             <span class="name">❌</span>
@@ -4178,22 +4185,16 @@ function renderTWBody(tid){
         }else{
           const c=COLORS[entry.color]||COLORS.forest;const rv=rates[entry.name]||0;
           const standard=entryIsStandard(entry);
-          if(standard){
-            cell.innerHTML=`<div class="chip" style="background:${c.bg};color:${c.text}">
-              <span class="name">${entry.name}</span>
-              ${rv>0?'<span class="rate-tag">NT$'+rv.toLocaleString()+'</span>':''}
-              <button class="del" onclick="deleteEntry(event,'${key}')">✕</button>
-            </div>`;
-          }else{
-            cell.style.position='relative';
-            cell.innerHTML=`<div class="chip spanning" style="background:${c.bg};color:${c.text};${spanCardStyle(h,entry)}">
-              <span class="name">${entry.name}</span>
-              ${rv>0?'<span class="rate-tag">NT$'+rv.toLocaleString()+'</span>':''}
-              <span class="time-tag">${fmtRangeEntry(h,entry)}</span>
-              <button class="del" onclick="deleteEntry(event,'${key}')">✕</button>
-            </div>`;
-          }
+          cell.innerHTML=`<div class="chip" style="background:${c.bg};color:${c.text}">
+            <span class="name">${entry.name}</span>
+            ${rv>0?'<span class="rate-tag">NT$'+rv.toLocaleString()+'</span>':''}
+            ${standard?'':'<span class="time-tag">'+fmtRangeEntry(h,entry)+'</span>'}
+            <button class="del" onclick="deleteEntry(event,'${key}')">✕</button>
+          </div>`;
         }
+        cell.onclick=()=>openModal(h,di,key);
+      }else{
+        cell.innerHTML='<div class="plus">+</div>';
         cell.onclick=()=>openModal(h,di,key);
       }
       tr.appendChild(cell);
@@ -4207,16 +4208,19 @@ function renderOTBody(tid){
   const tbody=document.getElementById(tid);tbody.innerHTML='';
   const otMap=buildOTMap();
   const otHours=getOTDisplayHours();
+  const skip=new Array(DAYS.length).fill(0);
   otHours.forEach(h=>{
     const tr=document.createElement('tr');
     const td=document.createElement('td');td.className='time-col';td.textContent=fmtRangeOT(h);tr.appendChild(td);
     DAYS.forEach((_,otDi)=>{
+      if(skip[otDi]>0){skip[otDi]--;return;}
       const cell=document.createElement('td');cell.className='cell mirror';
       const entries=otMap[otDi]&&otMap[otDi][h]?otMap[otDi][h]:[];
       const anchor=entries.find(x=>x.isAnchor);
-      const cont=!anchor&&entries.length>0?entries[0]:null;
       if(anchor){
         const entry=anchor.entry;
+        const span=Math.max(1,Math.ceil((anchor.otStartMin+anchor.durationMin)/60));
+        if(span>1){cell.rowSpan=span;skip[otDi]=span-1;}
         if(entry.name==='X'){
           cell.innerHTML=`<div class="chip mirror-chip" style="background:#efece0;color:#8a8072;border:1px dashed #c9bfa0">
             <span class="name">❌</span>
@@ -4224,23 +4228,11 @@ function renderOTBody(tid){
         }else{
           const c=COLORS[entry.color]||COLORS.forest;
           const standard=entryIsStandard(entry);
-          if(standard){
-            cell.innerHTML=`<div class="chip mirror-chip" style="background:${c.bg};color:${c.text}">
-              <span class="name">${entry.name}</span>
-            </div>`;
-          }else{
-            cell.style.position='relative';
-            const top=Math.round(anchor.otStartMin/60*SCHED_ROW_H);
-            const height=Math.max(SCHED_ROW_H-4,Math.round(anchor.durationMin/60*SCHED_ROW_H)-4);
-            cell.innerHTML=`<div class="chip mirror-chip spanning" style="background:${c.bg};color:${c.text};position:absolute;left:2px;right:2px;top:${top}px;height:${height}px;z-index:3;">
-              <span class="name">${entry.name}</span>
-              <span class="time-tag">${fmtHM(h*60+anchor.otStartMin)}–${fmtHM(h*60+anchor.otStartMin+anchor.durationMin)}</span>
-            </div>`;
-          }
+          cell.innerHTML=`<div class="chip mirror-chip" style="background:${c.bg};color:${c.text}">
+            <span class="name">${entry.name}</span>
+            ${standard?'':'<span class="time-tag">'+fmtHM(h*60+anchor.otStartMin)+'–'+fmtHM(h*60+anchor.otStartMin+anchor.durationMin)+'</span>'}
+          </div>`;
         }
-      }else if(cont){
-        // 被延續蓋過來的格子：留空，由前一格的卡片蓋過來
-        cell.className='cell mirror covered';
       }
       tr.appendChild(cell);
     });
@@ -4333,7 +4325,7 @@ function renderIncomeTable(){
   });
   const totalSessions=Object.keys(students).reduce((a,n)=>a+sessionCount(n),0);
   const monthlyTotal=weeklyTotal*MONTHLY_MULT;
-  tfoot.innerHTML=`<tr><td></td><td style="font-weight:700">合計</td><td></td><td></td><td></td><td></td>
+  tfoot.innerHTML=`<tr><td></td><td style="font-weight:700">合計</td><td></td><td></td><td></td><td></td><td></td>
     <td class="num" style="font-weight:700">${totalSessions}</td>
     <td class="num" style="font-weight:700">${weeklyTotal>0?'NT$ '+weeklyTotal.toLocaleString():'—'}</td>
     <td class="num" style="font-weight:700">${monthlyTotal>0?'NT$ '+monthlyTotal.toLocaleString():'—'}</td>
