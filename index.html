@@ -862,8 +862,8 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 #scheduleTab .tbl-wrap{overflow-x:auto}
 #scheduleTab table.sched{width:100%;border-collapse:collapse;table-layout:fixed;background:var(--forest-card)}
 #scheduleTab table.sched th{font-size:10px;font-weight:700;color:#fff;padding:5px 2px;border:1px solid var(--forest-bark);text-align:center;background:var(--forest-bark)}
-#scheduleTab table.sched td.time-col{font-size:9px;padding:2px 3px;border:1px solid var(--forest-line);text-align:center;white-space:nowrap;background:var(--forest-pale);width:60px;height:44px;vertical-align:middle;color:var(--forest-bark)}
-#scheduleTab table.sched td.cell{border:1px solid var(--forest-line);padding:2px;vertical-align:middle;height:44px;cursor:pointer;background:var(--forest-card);transition:background 0.1s}
+#scheduleTab table.sched td.time-col{box-sizing:border-box;font-size:9px;padding:2px 3px;border:1px solid var(--forest-line);text-align:center;white-space:nowrap;background:var(--forest-pale);width:60px;height:44px;vertical-align:middle;color:var(--forest-bark)}
+#scheduleTab table.sched td.cell{box-sizing:border-box;border:1px solid var(--forest-line);padding:2px;vertical-align:middle;height:44px;cursor:pointer;background:var(--forest-card);transition:background 0.1s}
 #scheduleTab table.sched td.cell:hover{background:var(--forest-gold-pale)}
 #scheduleTab table.sched td.cell.mirror, #scheduleTab table.sched td.cell.free-cell{cursor:default}
 #scheduleTab table.sched td.cell.mirror:hover{background:var(--forest-card)}
@@ -4041,13 +4041,14 @@ function natSelectOptions(selectedId){
   return html;
 }
 // 依課表自動取得該學生每個時段的「週幾 時間」，例如「三 1000-1100、四 1000-1100」
+// （會讀實際的 startMin／durationMin，不再寫死當成 1 小時整）
 function autoTWTimeText(name){
   const slots=Object.entries(schedule)
     .filter(([k,e])=>e&&e.name===name)
-    .map(([k])=>{const[h,di]=k.split('_').map(Number);return{h,di};})
+    .map(([k,e])=>{const[h,di]=k.split('_').map(Number);return{h,di,e};})
     .sort((a,b)=>a.di-b.di||a.h-b.h);
   if(slots.length===0)return'';
-  return slots.map(s=>DAYS[s.di]+' '+fmtHMCompact(s.h*60)+'-'+fmtHMCompact(s.h*60+60)).join('、');
+  return slots.map(s=>DAYS[s.di]+' '+fmtHMCompact(entryAbsStart(s.h,s.e))+'-'+fmtHMCompact(entryAbsEnd(s.h,s.e))).join('、');
 }
 // 解析使用者輸入／自動帶入的「台灣時間」文字，支援用「、」「,」換行分隔多筆，
 // 每筆格式「週幾 HHMM-HHMM」（週幾可省略，省略時依序對應課表原本的時段；也相容舊的 HH:MM–HH:MM 格式）
