@@ -912,6 +912,8 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 #scheduleTab table.income tr:hover td{background:var(--forest-pale)}
 #scheduleTab table.income tfoot td{font-weight:700;background:var(--forest-gold-pale)}
 #scheduleTab .rate-input{font-size:12px;padding:5px 7px;border-radius:6px;border:1px solid var(--forest-line);background:#fff;color:var(--forest-deep);width:90px;text-align:center;font-family:inherit}
+#scheduleTab .dur-input{font-size:12px;padding:5px 4px;border-radius:6px;border:1px solid var(--forest-line);background:#fff;color:var(--forest-deep);width:44px;text-align:center;font-family:inherit}
+#scheduleTab .origfee-input{font-size:12px;padding:5px 6px;border-radius:6px;border:1px solid var(--forest-line);background:#fff;color:var(--forest-deep);width:76px;text-align:center;font-family:inherit}
 #scheduleTab .nat-select{font-size:12px;padding:5px 6px;border-radius:6px;border:1px solid var(--forest-line);background:#fff;color:var(--forest-deep);width:100%;text-align:center;text-align-last:center;font-family:inherit}
 #scheduleTab .tw-time-input{font-size:12px;padding:5px 7px;border-radius:6px;border:1px solid var(--forest-line);background:#fff;color:var(--forest-deep);width:100%;text-align:center;font-family:inherit}
 #scheduleTab .local-time-cell{text-align:center}
@@ -1154,11 +1156,11 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         <table class="income">
           <thead><tr>
             <th style="width:22px"></th><th style="width:60px">學生</th>
-            <th style="width:100px">國籍</th>
-            <th style="width:170px">台灣時間</th>
-            <th style="width:170px">當地時間</th>
-            <th class="num" style="width:100px">每堂收費（原幣別）</th>
-            <th class="num" style="width:90px">每小時收費（NT$）</th><th class="num" style="width:66px">上課時長(分)</th><th class="num" style="width:58px">每週堂數</th>
+            <th style="width:140px">國籍</th>
+            <th style="width:210px">台灣時間</th>
+            <th style="width:210px">當地時間</th>
+            <th class="num" style="width:1%;white-space:nowrap">每堂收費（原幣別）</th>
+            <th class="num" style="width:90px">每小時收費（NT$）</th><th class="num" style="width:1%;white-space:nowrap">上課時長(分)</th><th class="num" style="width:58px">每週堂數</th>
             <th class="num" style="width:88px">每週收入</th><th class="num" style="width:88px">每月預估</th>
             <th style="width:52px">不穩定</th>
             <th style="width:48px">刪除</th>
@@ -3722,6 +3724,7 @@ const COLORS={
   moss:{bg:'#dce4d0',text:'#4a5c2a'},
 };
 const COLOR_KEYS=Object.keys(COLORS);
+const COLOR_LABELS={forest:'森林綠',gold:'鵝黃',berry:'莓紅',sage:'鼠尾草綠',plum:'梅紫',clay:'陶土橘',moss:'苔蘚綠'};
 
 let schedule={},rates={},unstable={},retired={},studentInfo={},currentTZ=null,diffMin=0,currentCell=null,saveTimer=null;
 
@@ -4846,7 +4849,7 @@ function exportFreeImage(side){
 // ── 新增/編輯 modal ──
 function openModal(h,di,key){
   currentCell={h,di,key};const e=schedule[key]||{};
-  const opts=COLOR_KEYS.map(k=>`<option value="${k}"${(e.color||'forest')===k?' selected':''}>${k}</option>`).join('');
+  const opts=COLOR_KEYS.map(k=>`<option value="${k}"${(e.color||'forest')===k?' selected':''}>${COLOR_LABELS[k]||k}</option>`).join('');
   const startMin=entryStartMin(e);
   const perClassMin=e.name?entryPerClassMin(e):60;
   const classCount=e.name?entryClassCount(e):1;
