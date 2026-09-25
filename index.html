@@ -1158,7 +1158,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
             <th style="width:170px">台灣時間</th>
             <th style="width:170px">當地時間</th>
             <th class="num" style="width:100px">每堂收費（原幣別）</th>
-            <th class="num" style="width:90px">每堂收費（NT$）</th><th class="num" style="width:58px">每週堂數</th>
+            <th class="num" style="width:90px">每小時收費（NT$）</th><th class="num" style="width:66px">上課時長(分)</th><th class="num" style="width:58px">每週堂數</th>
             <th class="num" style="width:88px">每週收入</th><th class="num" style="width:88px">每月預估</th>
             <th style="width:52px">不穩定</th>
             <th style="width:48px">刪除</th>
@@ -1176,7 +1176,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         <table class="income">
           <thead><tr>
             <th style="width:24px"></th><th>學生</th>
-            <th class="num">停課前每堂收費（NT$）</th><th>停課日期</th>
+            <th class="num">停課前每小時收費（NT$）</th><th>停課日期</th>
             <th style="width:90px;text-align:center">動作</th>
           </tr></thead>
           <tbody id="retired-body"></tbody>
@@ -1703,16 +1703,20 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         studentData.forEach(s => { existingByName[s.name] = s; });
         const nextList = Object.entries(students).map(([name, colorKey]) => {
             const c = COLORS[colorKey] || COLORS.forest;
-            const rate = rates[name] || 0;
+            const rate = rates[name] || 0; // 每小時收費
             const prev = existingByName[name];
             const info = (typeof studentInfo !== 'undefined' && studentInfo[name]) || {};
             // 原幣別金額以「華語課表」分頁「學生收費設定」的輸入為主；
             // 若該學生尚未在那邊填寫，則沿用先前在本分頁手動填過的值（相容舊資料）
             const origFee = info.origFee ? info.origFee : ((prev && prev.fee) ? prev.fee : '');
+            // 台幣欄位顯示的是「參考金額」：每小時收費 × 這位學生預設的上課時長，
+            // 不是每小時費率本身；某天實際上課時間跟平常不同的話，那天請直接在格子裡手動改金額
+            const defaultDur = (info.defaultDur > 0) ? info.defaultDur : 60;
+            const refAmount = rate ? Math.round(rate * defaultDur / 60) : '';
             return {
                 name,
                 fee: origFee,
-                twd: rate ? String(rate) : '',
+                twd: refAmount ? String(refAmount) : '',
                 bg: c.bg
             };
         }).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
@@ -3876,6 +3880,10 @@ function cellKey(h,di){return h+'_'+di;}
 ============================================================ */
 function entryStartMin(e){return (e&&e.startMin===30)?30:0;}
 function entryDurMin(e){return (e&&e.durationMin>0)?e.durationMin:60;}
+/* 每堂上課時間（分鐘）／連續幾堂：用來計算「堂數」跟收入。
+   舊資料沒有這兩個欄位時，回退成「1堂、每堂=durationMin」，跟改版前的資料完全相容。 */
+function entryPerClassMin(e){return (e&&e.perClassMin>0)?e.perClassMin:entryDurMin(e);}
+function entryClassCount(e){return (e&&e.classCount>0)?Math.round(e.classCount):1;}
 function entryIsStandard(e){return entryStartMin(e)===0&&entryDurMin(e)===60;}
 function entryAbsStart(h,e){return h*60+entryStartMin(e);}
 function entryAbsEnd(h,e){return entryAbsStart(h,e)+entryDurMin(e);}
@@ -3932,9 +3940,12 @@ function getStudents(){
 }
 
 function sessionCount(name){return Object.values(schedule).filter(e=>e&&e.name===name).length;}
-// 堂數的「時數」版本：只用在畫面顯示（例如「學生收費設定」表的每週堂數欄），
-// 1.5 小時的課就算 1.5 堂；收費計算（每堂收費 × 堂數）完全不用這個，還是維持用 sessionCount()
-// 那種「固定金額、一筆課算一堂」的算法，避免影響「每日上課收入」那邊的學生收費設定。
+// 堂數：加總每一筆課程存的「連續幾堂」（一堂多久 × 連續幾堂 才是總時長），永遠是整數
+function sessionClassCount(name){
+  return Object.values(schedule).filter(e=>e&&e.name===name).reduce((s,e)=>s+entryClassCount(e),0);
+}
+// 總時數：加總每一筆課程的實際總時長（小時）。收入 = 這個 × 每小時收費，
+// 用「每一筆實際排的時長」去算，不是用學生的「預設每堂時長」，這樣時長跟預設不同的那幾筆才會算準。
 function sessionHours(name){
   const total=Object.values(schedule).filter(e=>e&&e.name===name).reduce((s,e)=>s+entryDurMin(e)/60,0);
   return Math.round(total*2)/2; // 課程長度本來就是30分鐘的倍數，四捨五入到最接近的0.5避免浮點數誤差
@@ -3972,7 +3983,7 @@ function incomePerDay(di){
   let t=0;
   TW_HOURS.forEach(h=>{
     const e=schedule[cellKey(h,di)];
-    if(e&&e.name&&e.name!=='X')t+=(rates[e.name]||0);
+    if(e&&e.name&&e.name!=='X')t+=Math.round((rates[e.name]||0)*entryDurMin(e)/60);
   });
   return t;
 }
@@ -3982,7 +3993,7 @@ function minIncomePerDay(di){
   let t=0;
   TW_HOURS.forEach(h=>{
     const e=schedule[cellKey(h,di)];
-    if(e&&e.name&&e.name!=='X'&&!isUnstable(e.name))t+=(rates[e.name]||0);
+    if(e&&e.name&&e.name!=='X'&&!isUnstable(e.name))t+=Math.round((rates[e.name]||0)*entryDurMin(e)/60);
   });
   return t;
 }
@@ -4148,8 +4159,22 @@ function updateStudentOrigFee(name,val){
   if(Object.keys(studentInfo[name]).length===0)delete studentInfo[name];
   renderIncomeTable();scheduleSave();
 }
-
-// ── 標頭（固定週一到週日） ──
+// 「上課時長」：這位學生排課時「每堂多久」的預設值（分鐘），沒設定過就當作 60 分鐘。
+// 新增課程時會自動帶入這個值（當次仍可另外調整），也用來換算「每日上課收入」學生收費表的參考金額。
+function getStudentDefaultDur(name){
+  const info=studentInfo[name];
+  return(info&&info.defaultDur>0)?info.defaultDur:60;
+}
+function updateStudentDefaultDur(name,val){
+  studentInfo[name]=studentInfo[name]||{};
+  const v=parseInt(val,10);
+  if(!v||v<=0)delete studentInfo[name].defaultDur;
+  else studentInfo[name].defaultDur=v;
+  if(Object.keys(studentInfo[name]).length===0)delete studentInfo[name];
+  renderIncomeTable();
+  if(typeof syncStudentsFromSchedule==='function')syncStudentsFromSchedule();
+  scheduleSave();
+}
 function renderHead(tid){
   document.getElementById(tid).innerHTML=
     '<tr><th style="width:60px">時間</th>'+DAYS.map(d=>'<th>'+d+'</th>').join('')+'</tr>';
@@ -4190,7 +4215,7 @@ function renderTWBody(tid){
             <button class="del" onclick="deleteEntry(event,'${key}')">✕</button>
           </div>`;
         }else{
-          const c=COLORS[entry.color]||COLORS.forest;const rv=rates[entry.name]||0;
+          const c=COLORS[entry.color]||COLORS.forest;const rv=Math.round((rates[entry.name]||0)*entryDurMin(entry)/60);
           const standard=entryIsStandard(entry);
           cell.innerHTML=`<div class="chip" style="background:${c.bg};color:${c.text}">
             <span class="name">${entry.name}</span>
@@ -4298,7 +4323,9 @@ function renderLegend(){
 
 function commitRate(name,val){
   rates[name]=parseInt(val)||0;
-  renderTWBody('tw-tbody');renderDayGrid();renderSummary();renderIncomeTable();scheduleSave();
+  renderTWBody('tw-tbody');renderDayGrid();renderSummary();renderIncomeTable();
+  if(typeof syncStudentsFromSchedule==='function')syncStudentsFromSchedule();
+  scheduleSave();
 }
 
 function renderIncomeTable(){
@@ -4310,8 +4337,10 @@ function renderIncomeTable(){
   const tbody=document.getElementById('rate-body');const tfoot=document.getElementById('rate-foot');
   tbody.innerHTML='';let weeklyTotal=0;
   Object.entries(students).forEach(([name,color])=>{
-    const c=COLORS[color]||COLORS.forest;const cnt=sessionCount(name);const hrs=sessionHours(name);const rate=rates[name]||0;
-    const weekly=cnt*rate;const monthly=weekly*MONTHLY_MULT;weeklyTotal+=weekly;
+    const c=COLORS[color]||COLORS.forest;const cls=sessionClassCount(name);const hrs=sessionHours(name);const rate=rates[name]||0;
+    const dur=getStudentDefaultDur(name);
+    const weekly=Math.round(hrs*rate);const monthly=weekly*MONTHLY_MULT;weeklyTotal+=weekly;
+    const refAmount=Math.round(rate*dur/60);
     const info=studentInfo[name]||{};
     const twText=getStudentTWTimeText(name);
     const localText=getStudentLocalTimeText(name);
@@ -4322,24 +4351,32 @@ function renderIncomeTable(){
       <td><input class="tw-time-input" type="text" data-name="${name}" value="${twText.replace(/"/g,'&quot;')}" placeholder="例：二 1400-1500"/></td>
       <td class="local-time-cell" style="color:var(--forest-bark)">${localText||(info.nat?'（無法解析時間）':'（請先選國籍）')}</td>
       <td class="num"><input class="origfee-input" type="text" placeholder="例：21美金" value="${(info.origFee||'').replace(/"/g,'&quot;')}" data-name="${name}"/></td>
-      <td class="num"><input class="rate-input" type="number" min="0" step="100" value="${rate}" data-name="${name}"/></td>
-      <td class="num">${hrs}</td>
+      <td class="num">
+        <input class="rate-input" type="number" min="0" step="50" value="${rate}" data-name="${name}"/>
+        ${rate>0?'<div style="font-size:9px;color:var(--forest-bark);opacity:0.7;margin-top:2px">≈NT$'+refAmount.toLocaleString()+'/堂('+dur+'分)</div>':''}
+      </td>
+      <td class="num"><input class="dur-input" type="number" min="5" step="5" value="${dur}" data-name="${name}" title="這位學生排課時「每堂多久」的預設值，新增課程會自動帶入，當次仍可另外調整"/></td>
+      <td class="num">${cls}</td>
       <td class="num">${weekly>0?'NT$ '+weekly.toLocaleString():'—'}</td>
       <td class="num">${monthly>0?'NT$ '+monthly.toLocaleString():'—'}</td>
       <td style="text-align:center"><input class="unstable-checkbox" type="checkbox" data-name="${name}" ${isUnstable(name)?'checked':''} title="上課狀況不固定，計算「預估最低收入」時排除這位學生"/></td>
       <td style="text-align:center"><button class="btn-mini-delete" onclick="retireStudent('${name.replace(/'/g,"\\'")}')" title="標記為不再上課">刪除</button></td>`;
     tbody.appendChild(tr);
   });
-  const totalHours=Object.keys(students).reduce((a,n)=>a+sessionHours(n),0);
+  const totalClassCount=Object.keys(students).reduce((a,n)=>a+sessionClassCount(n),0);
   const monthlyTotal=weeklyTotal*MONTHLY_MULT;
-  tfoot.innerHTML=`<tr><td></td><td style="font-weight:700">合計</td><td></td><td></td><td></td><td></td><td></td>
-    <td class="num" style="font-weight:700">${totalHours}</td>
+  tfoot.innerHTML=`<tr><td></td><td style="font-weight:700">合計</td><td></td><td></td><td></td><td></td><td></td><td></td>
+    <td class="num" style="font-weight:700">${totalClassCount}</td>
     <td class="num" style="font-weight:700">${weeklyTotal>0?'NT$ '+weeklyTotal.toLocaleString():'—'}</td>
     <td class="num" style="font-weight:700">${monthlyTotal>0?'NT$ '+monthlyTotal.toLocaleString():'—'}</td>
     <td></td><td></td></tr>`;
   document.querySelectorAll('.rate-input').forEach(inp=>{
     inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();inp.blur();commitRate(inp.dataset.name,inp.value);}};
     inp.onblur=()=>{commitRate(inp.dataset.name,inp.value);};
+  });
+  document.querySelectorAll('.dur-input').forEach(inp=>{
+    inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();inp.blur();updateStudentDefaultDur(inp.dataset.name,inp.value);}};
+    inp.onblur=()=>{updateStudentDefaultDur(inp.dataset.name,inp.value);};
   });
   document.querySelectorAll('.origfee-input').forEach(inp=>{
     inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();inp.blur();updateStudentOrigFee(inp.dataset.name,inp.value);}};
@@ -4536,10 +4573,7 @@ function renderDayGrid(){
   const grid=document.getElementById('day-grid');grid.innerHTML='';
   DAYS.forEach((_,di)=>{
     const income=incomePerDay(di);
-    const hrs=TW_HOURS.filter(h=>{
-      const e=schedule[cellKey(h,di)];
-      return e&&e.name&&e.name!=='X';
-    }).length;
+    const hrs=TW_HOURS.reduce((s,h)=>{const e=schedule[cellKey(h,di)];return s+((e&&e.name&&e.name!=='X')?entryClassCount(e):0);},0);
     const div=document.createElement('div');div.className='day-card';
     div.innerHTML=`<div class="day-name">週${DAYS[di]}</div>
       <div class="day-val">${income>0?'NT$<br>'+income.toLocaleString():'—'}</div>
@@ -4556,10 +4590,7 @@ function renderDayGrid(){
     const minGrid=document.getElementById('min-day-grid');minGrid.innerHTML='';
     DAYS.forEach((_,di)=>{
       const income=minIncomePerDay(di);
-      const hrs=TW_HOURS.filter(h=>{
-        const e=schedule[cellKey(h,di)];
-        return e&&e.name&&e.name!=='X'&&!isUnstable(e.name);
-      }).length;
+      const hrs=TW_HOURS.reduce((s,h)=>{const e=schedule[cellKey(h,di)];return s+((e&&e.name&&e.name!=='X'&&!isUnstable(e.name))?entryClassCount(e):0);},0);
       const div=document.createElement('div');div.className='day-card';
       div.innerHTML=`<div class="day-name">週${DAYS[di]}</div>
         <div class="day-val">${income>0?'NT$<br>'+income.toLocaleString():'—'}</div>
@@ -4573,18 +4604,18 @@ function renderDayGrid(){
 
 function schedRenderSummary(){
   const students=getStudents();
-  const weeklyTotal=Object.keys(students).reduce((s,n)=>s+sessionCount(n)*(rates[n]||0),0);
+  const weeklyTotal=Object.keys(students).reduce((s,n)=>s+Math.round(sessionHours(n)*(rates[n]||0)),0);
   const monthlyTotal=weeklyTotal*MONTHLY_MULT;const monthly70=Math.round(monthlyTotal*0.7);
-  const totalSessions=Object.keys(students).reduce((a,n)=>a+sessionCount(n),0);
+  const totalClassCount=Object.keys(students).reduce((a,n)=>a+sessionClassCount(n),0);
   
   const activeDays=DAYS.filter((_,di)=>TW_HOURS.some(h=>{
     const e=schedule[cellKey(h,di)];
     return e&&e.name&&e.name!=='X';
   })).length;
   
-  const avg=totalSessions>0?Math.round(weeklyTotal/totalSessions):0;
+  const avg=totalClassCount>0?Math.round(weeklyTotal/totalClassCount):0;
   document.getElementById('summary-cards').innerHTML=`
-    <div class="card"><div class="card-label">每週總收入</div><div class="card-value">${weeklyTotal>0?'NT$ '+weeklyTotal.toLocaleString():'—'}</div><div class="card-sub">${totalSessions} 堂／週</div></div>
+    <div class="card"><div class="card-label">每週總收入</div><div class="card-value">${weeklyTotal>0?'NT$ '+weeklyTotal.toLocaleString():'—'}</div><div class="card-sub">${totalClassCount} 堂／週</div></div>
     <div class="card"><div class="card-label">每月預估收入</div><div class="card-value">${monthlyTotal>0?'NT$ '+monthlyTotal.toLocaleString():'—'}</div><div class="card-sub">× 4 週（100%）</div></div>
     <div class="card highlight"><div class="card-label">70% 授課率預估</div><div class="card-value">${monthly70>0?'NT$ '+monthly70.toLocaleString():'—'}</div><div class="card-sub">每月預估 × 70%</div></div>
     <div class="card"><div class="card-label">平均每堂收費</div><div class="card-value">${avg>0?'NT$ '+avg.toLocaleString():'—'}</div><div class="card-sub">全體平均</div></div>
@@ -4598,17 +4629,17 @@ function schedRenderSummary(){
       `已排除以下上課狀況不固定的學生的收費：${unstableNames.join('、')}。此區塊數據可與上方「收入總覽」（納入全部學生）互相比較。`;
 
     const stableStudents=Object.keys(students).filter(n=>!isUnstable(n));
-    const minWeeklyTotal=stableStudents.reduce((s,n)=>s+sessionCount(n)*(rates[n]||0),0);
+    const minWeeklyTotal=stableStudents.reduce((s,n)=>s+Math.round(sessionHours(n)*(rates[n]||0)),0);
     const minMonthlyTotal=minWeeklyTotal*MONTHLY_MULT;const minMonthly70=Math.round(minMonthlyTotal*0.7);
-    const minTotalSessions=stableStudents.reduce((a,n)=>a+sessionCount(n),0);
+    const minTotalClassCount=stableStudents.reduce((a,n)=>a+sessionClassCount(n),0);
     const minActiveDays=DAYS.filter((_,di)=>TW_HOURS.some(h=>{
       const e=schedule[cellKey(h,di)];
       return e&&e.name&&e.name!=='X'&&!isUnstable(e.name);
     })).length;
-    const minAvg=minTotalSessions>0?Math.round(minWeeklyTotal/minTotalSessions):0;
+    const minAvg=minTotalClassCount>0?Math.round(minWeeklyTotal/minTotalClassCount):0;
 
     document.getElementById('min-summary-cards').innerHTML=`
-      <div class="card"><div class="card-label">每週最低收入</div><div class="card-value">${minWeeklyTotal>0?'NT$ '+minWeeklyTotal.toLocaleString():'—'}</div><div class="card-sub">${minTotalSessions} 堂／週</div></div>
+      <div class="card"><div class="card-label">每週最低收入</div><div class="card-value">${minWeeklyTotal>0?'NT$ '+minWeeklyTotal.toLocaleString():'—'}</div><div class="card-sub">${minTotalClassCount} 堂／週</div></div>
       <div class="card"><div class="card-label">每月最低預估收入</div><div class="card-value">${minMonthlyTotal>0?'NT$ '+minMonthlyTotal.toLocaleString():'—'}</div><div class="card-sub">× 4 週（100%）</div></div>
       <div class="card highlight"><div class="card-label">70% 授課率最低預估</div><div class="card-value">${minMonthly70>0?'NT$ '+minMonthly70.toLocaleString():'—'}</div><div class="card-sub">每月最低預估 × 70%</div></div>
       <div class="card"><div class="card-label">平均每堂收費</div><div class="card-value">${minAvg>0?'NT$ '+minAvg.toLocaleString():'—'}</div><div class="card-sub">穩定學生平均</div></div>
@@ -4635,16 +4666,16 @@ async function runSchedAiAnalysis(){
 
   try{
     const students=getStudents();
-    const weeklyTotal=Object.keys(students).reduce((s,n)=>s+sessionCount(n)*(rates[n]||0),0);
+    const weeklyTotal=Object.keys(students).reduce((s,n)=>s+Math.round(sessionHours(n)*(rates[n]||0)),0);
     const monthlyTotal=weeklyTotal*MONTHLY_MULT;
-    const totalSessions=Object.keys(students).reduce((a,n)=>a+sessionCount(n),0);
+    const totalClassCount=Object.keys(students).reduce((a,n)=>a+sessionClassCount(n),0);
     const unstableNames=Object.keys(unstable).filter(n=>students[n]);
     const retiredList=getRetiredStudents();
-    const studentLines=Object.keys(students).map(n=>`${n}：每堂NT$${rates[n]||0}，每週${sessionCount(n)}堂${isUnstable(n)?'（不穩定）':''}`);
+    const studentLines=Object.keys(students).map(n=>`${n}：每小時NT$${rates[n]||0}，每週${sessionClassCount(n)}堂（共${sessionHours(n)}小時）${isUnstable(n)?'（不穩定）':''}`);
 
-    const promptText=`你是一位教學收入財務顧問，以下是一位在台灣經營中文家教／線上中文教學品牌「每天一分鐘」的老師，目前「華語課表」的資料（幣別為台幣）：
+    const promptText=`你是一位教學收入財務顧問，以下是一位在台灣經營中文家教／線上中文教學品牌「每天一分鐘」的老師，目前「華語課表」的資料（幣別為台幣，收費以「每小時」計價）：
 
-【目前在課學生】共 ${Object.keys(students).length} 位，每週共 ${totalSessions} 堂課
+【目前在課學生】共 ${Object.keys(students).length} 位，每週共 ${totalClassCount} 堂課
 ${studentLines.join('\n')||'（尚無學生）'}
 
 【每週總收入】NT$ ${weeklyTotal}
@@ -4682,8 +4713,8 @@ function exportScheduleExcel(){
 
   const dayAoa=[['星期','金額(NT$)','堂數']];
   DAYS.forEach((_,di)=>{
-    const hrs=TW_HOURS.filter(h=>{const e=schedule[cellKey(h,di)];return e&&e.name&&e.name!=='X';}).length;
-    dayAoa.push(['週'+DAYS[di], incomePerDay(di)||0, hrs]);
+    const cnt=TW_HOURS.reduce((s,h)=>{const e=schedule[cellKey(h,di)];return s+((e&&e.name&&e.name!=='X')?entryClassCount(e):0);},0);
+    dayAoa.push(['週'+DAYS[di], incomePerDay(di)||0, cnt]);
   });
   const unstableNames=Object.keys(unstable).filter(n=>getStudents()[n]);
   if(unstableNames.length>0){
@@ -4691,8 +4722,8 @@ function exportScheduleExcel(){
     dayAoa.push(['預估最低每日收入（已排除：'+unstableNames.join('、')+'）']);
     dayAoa.push(['星期','金額(NT$)','堂數']);
     DAYS.forEach((_,di)=>{
-      const hrs=TW_HOURS.filter(h=>{const e=schedule[cellKey(h,di)];return e&&e.name&&e.name!=='X'&&!isUnstable(e.name);}).length;
-      dayAoa.push(['週'+DAYS[di], minIncomePerDay(di)||0, hrs]);
+      const cnt=TW_HOURS.reduce((s,h)=>{const e=schedule[cellKey(h,di)];return s+((e&&e.name&&e.name!=='X'&&!isUnstable(e.name))?entryClassCount(e):0);},0);
+      dayAoa.push(['週'+DAYS[di], minIncomePerDay(di)||0, cnt]);
     });
   }
   sheets.push({name:'每日收入', aoa:dayAoa});
@@ -4817,34 +4848,41 @@ function openModal(h,di,key){
   currentCell={h,di,key};const e=schedule[key]||{};
   const opts=COLOR_KEYS.map(k=>`<option value="${k}"${(e.color||'forest')===k?' selected':''}>${k}</option>`).join('');
   const startMin=entryStartMin(e);
-  const durationMin=entryDurMin(e);
-  const isPreset=durationMin===60||durationMin===90||durationMin===120;
+  const perClassMin=e.name?entryPerClassMin(e):60;
+  const classCount=e.name?entryClassCount(e):1;
   const hh=String(h).padStart(2,'0');
   document.getElementById('modal-mount').innerHTML=`<div class="modal-overlay"><div class="modal">
     <h3>${e.name?'編輯學生':'新增學生'}</h3>
-    <label>學生姓名</label><input type="text" id="m-name" placeholder="請輸入姓名" value="${e.name||''}"/>
+    <label>學生姓名</label><input type="text" id="m-name" placeholder="請輸入姓名" value="${e.name||''}" onblur="applyStudentDefaultDur()"/>
     <label>顏色標記</label><select id="m-color">${opts}</select>
     <label>開始時間</label><select id="m-start">
       <option value="0"${startMin===0?' selected':''}>${hh}:00</option>
       <option value="30"${startMin===30?' selected':''}>${hh}:30</option>
     </select>
-    <label>課程長度</label><select id="m-dur" onchange="onDurChange()">
-      <option value="60"${durationMin===60?' selected':''}>1小時</option>
-      <option value="90"${durationMin===90?' selected':''}>1.5小時</option>
-      <option value="120"${durationMin===120?' selected':''}>2小時</option>
-      <option value="custom"${!isPreset?' selected':''}>其他</option>
+    <label>每堂上課時間（分鐘）</label><input type="number" id="m-per-class" min="5" step="5" value="${perClassMin}" oninput="this.dataset.touched='1'"/>
+    <label>連續幾堂</label><select id="m-class-count">
+      <option value="1"${classCount===1?' selected':''}>1 堂</option>
+      <option value="2"${classCount===2?' selected':''}>2 堂</option>
+      <option value="3"${classCount===3?' selected':''}>3 堂</option>
+      <option value="4"${classCount===4?' selected':''}>4 堂</option>
     </select>
-    <div id="m-dur-custom-wrap" style="display:${!isPreset?'block':'none'};margin-top:6px;">
-      <label>自訂長度（分鐘，30的倍數）</label><input type="number" id="m-dur-custom" min="30" step="30" value="${!isPreset?durationMin:90}"/>
-    </div>
     <div class="modal-btns"><button onclick="closeModal()">取消</button><button class="primary" onclick="saveEntry()">儲存</button></div>
   </div></div>`;
-  setTimeout(()=>document.getElementById('m-name').focus(),50);
+  setTimeout(()=>{
+    const nameEl=document.getElementById('m-name');
+    if(nameEl){nameEl.focus();if(nameEl.value)applyStudentDefaultDur();}
+  },50);
 }
-function onDurChange(){
-  const v=document.getElementById('m-dur').value;
-  const wrap=document.getElementById('m-dur-custom-wrap');
-  if(wrap)wrap.style.display=(v==='custom')?'block':'none';
+// 學生姓名填完（或本來就是編輯既有課程）時，如果「每堂上課時間」還沒被手動改過，
+// 就自動帶入這位學生在「學生收費設定」設定的預設上課時長，當次仍可自己改
+function applyStudentDefaultDur(){
+  const nameEl=document.getElementById('m-name');
+  const perEl=document.getElementById('m-per-class');
+  if(!nameEl||!perEl)return;
+  const name=nameEl.value.trim();
+  if(!name||name==='X')return;
+  if(perEl.dataset.touched==='1')return;
+  perEl.value=(typeof getStudentDefaultDur==='function')?getStudentDefaultDur(name):60;
 }
 function closeModal(){document.getElementById('modal-mount').innerHTML='';currentCell=null;}
 function saveEntry(){
@@ -4858,11 +4896,13 @@ function saveEntry(){
     closeModal();renderSched();scheduleSave();
     return;
   }
+  let perClassMin=parseInt(document.getElementById('m-per-class').value,10);
+  if(!perClassMin||perClassMin<5)perClassMin=60;
+  let classCount=parseInt(document.getElementById('m-class-count').value,10);
+  if(!classCount||classCount<1)classCount=1;
+  if(classCount>4)classCount=4;
   const startMin=parseInt(document.getElementById('m-start').value,10)===30?30:0;
-  const durSel=document.getElementById('m-dur').value;
-  let durationMin=durSel==='custom'?parseInt(document.getElementById('m-dur-custom').value,10):parseInt(durSel,10);
-  if(!durationMin||durationMin<30)durationMin=60;
-  durationMin=Math.round(durationMin/30)*30; // 強制卡在 30 分鐘刻度
+  const durationMin=perClassMin*classCount;
 
   const di=currentCell.di,h=currentCell.h;
   const newStart=h*60+startMin,newEnd=newStart+durationMin;
@@ -4874,9 +4914,9 @@ function saveEntry(){
     const s=entryAbsStart(kh,ent),en=entryAbsEnd(kh,ent);
     if(newStart<en&&s<newEnd)conflict=true;
   });
-  if(conflict){alert('這個時間跟同一天的另一堂課重疊了，請調整開始時間或課程長度');return;}
+  if(conflict){alert('這個時間跟同一天的另一堂課重疊了，請調整開始時間、每堂上課時間或堂數');return;}
 
-  schedule[currentCell.key]={name,color,startMin,durationMin};
+  schedule[currentCell.key]={name,color,startMin,durationMin,perClassMin,classCount};
   closeModal();renderSched();scheduleSave();
 }
 function deleteEntry(e,key){e.stopPropagation();delete schedule[key];renderSched();scheduleSave();}
@@ -5939,7 +5979,7 @@ function genRemainingToday(){
     TW_HOURS.forEach(h => {
         if (h < curH) return;
         const e = schedule[cellKey(h, di)];
-        if (e && e.name && e.name !== 'X') { remCount++; remAmt += (rates[e.name] || 0); }
+        if (e && e.name && e.name !== 'X') { remCount += entryClassCount(e); remAmt += Math.round((rates[e.name] || 0) * entryDurMin(e) / 60); }
     });
     if (!remCount) return [];
     return [`⏰ 今天還有 ${remCount} 堂課，預計再入帳 NT$ ${remAmt.toLocaleString()}`];
