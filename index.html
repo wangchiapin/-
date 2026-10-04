@@ -686,6 +686,21 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
     .input-cell.has-value input{color:#3a2408;}
     .input-cell.has-value input:focus{background-color:#f3ac6e;}
     .empty-day{background:#efece0;}
+    /* 「課程行事曆」當天排課小提示（唯讀，不是輸入格） */
+    .day-hint{
+        font-size:9.5px; color:var(--forest-bark); background:var(--forest-gold-pale);
+        padding:1px 3px; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        border-bottom:1px solid var(--forest-line);
+    }
+    .day-hint.empty{background:transparent; color:transparent;}
+    #reconcileResult{
+        background:var(--forest-card); border:1px solid var(--forest-line); border-radius:8px;
+        padding:10px 12px; margin-bottom:10px; font-size:12px; line-height:1.7;
+    }
+    #reconcileResult .rc-title{font-weight:700; color:var(--forest-deep); margin-bottom:4px;}
+    #reconcileResult .rc-row{display:flex; justify-content:space-between; gap:10px; border-bottom:1px dashed var(--forest-line); padding:3px 0;}
+    #reconcileResult .rc-row:last-child{border-bottom:none;}
+    #reconcileResult .rc-ok{color:var(--forest-mid);}
     .calendar-table td.weekly-total{
         vertical-align:middle; font-weight:700; font-size:11px; color:var(--forest-deep);
         background:var(--forest-gold-pale); text-align:center;
@@ -1168,6 +1183,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 }
 #view-coursecal .cc-chip.dragging{opacity:.3;}
 #view-coursecal .cc-chip.paid-absence{text-decoration:line-through;}
+#view-coursecal .cc-chip.leave{text-decoration:line-through;opacity:.7;}
 #view-coursecal .cc-chip .warn, #view-coursecal .cc-chip .trip{font-size:10px;line-height:1;}
 #view-coursecal .cc-more-chip{font-size:10px;color:var(--cc-text-dim);padding:1px 4px;}
 
@@ -1197,6 +1213,8 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 #view-coursecal .cc-agenda-card .t{font-size:11px;opacity:.75;}
 #view-coursecal .cc-agenda-card .n{font-size:14px;font-weight:700;display:flex;align-items:center;gap:5px;}
 #view-coursecal .cc-agenda-card.paid-absence .n .name-text{text-decoration:line-through;}
+#view-coursecal .cc-agenda-card.leave .n .name-text{text-decoration:line-through;}
+#view-coursecal .cc-agenda-card.leave{opacity:.7;}
 
 /* empty state */
 #view-coursecal .cc-empty-day{color:var(--cc-text-dim);text-align:center;padding:30px 0;font-size:13px;}
@@ -1611,6 +1629,10 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
           <input type="checkbox" id="fPaidAbsence">
           <label style="margin:0" for="fPaidAbsence">沒上課有付錢（特殊標記）</label>
         </div>
+        <div class="cc-checkbox-row" style="margin-top:6px;">
+          <input type="checkbox" id="fLeave">
+          <label style="margin:0" for="fLeave">請假（不收費，預設在行事曆上隱藏）</label>
+        </div>
       </div>
       <div class="cc-field">
         <label>備註</label>
@@ -1703,6 +1725,10 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
       <button id="filterNone">全部取消</button>
     </div>
     <div id="filterList"></div>
+    <div class="cc-filter-row" style="border-top:1px solid var(--cc-border);margin-top:8px;padding-top:12px;">
+      <label>💤 顯示請假課程（預設隱藏）</label>
+      <input type="checkbox" id="filterShowLeave">
+    </div>
     <div class="cc-sheet-actions">
       <button class="cc-btn primary" id="btnCloseFilter" style="width:100%">完成</button>
     </div>
@@ -1765,8 +1791,10 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
                 <button class="btn-cal-import" onclick="document.getElementById('calendarImportInput').click()">📥 匯入每日紀錄</button>
                 <button class="btn-cal-import" onclick="exportCalendarExcel()">📤 匯出 Excel（本月）</button>
                 <button class="btn-cal-import" onclick="exportCalendarExcelAllMonths()">📤 匯出 Excel（全部月份）</button>
+                <button class="btn-cal-import" id="btnReconcileCheck" onclick="runReconcileCheck()" title="比對本月「課程行事曆」排的堂數跟這裡已填的筆數">🔍 對帳檢查</button>
                 <input type="file" id="calendarImportInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importCalendarIncome(event)">
             </div>
+            <div id="reconcileResult" style="display:none;"></div>
             <div id="calendar-area"></div>
             <div class="summary-container">
                 <table class="summary-table">
@@ -2291,9 +2319,30 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         renderCalendar();
     }
 
+    /* 從「課程行事曆」取得某段期間內每一天排了哪些學生（唯讀，不會寫回行事曆）。
+       請假的課程視為「沒上到課」，不算進提示跟對帳；行事曆分頁自己要不要顯示請假課程是另一件事，不影響這裡。
+       回傳：{ 'YYYY-MM-DD': [{name, paidAbsence}, ...] } */
+    function buildCcDayMap(rangeStartISO, rangeEndISO) {
+        const map = {};
+        if (typeof window.ccGetOccurrencesInRange !== 'function') return map;
+        let occ = [];
+        try { occ = window.ccGetOccurrencesInRange(rangeStartISO, rangeEndISO) || []; }
+        catch (e) { console.error('讀取課程行事曆資料失敗', e); return map; }
+        occ.forEach(o => {
+            if (o.leave) return; // 請假＝沒上到課，不算
+            if (!map[o.date]) map[o.date] = [];
+            map[o.date].push({ name: o.studentName, paidAbsence: !!o.paidAbsence });
+        });
+        return map;
+    }
+
     function renderCalendar() {
         const rocYear = currentYear - ROC_YEAR_OFFSET;
         document.getElementById('monthTitle').textContent = `${rocYear}年${currentMonth + 1}月`;
+        const ccFirstISO = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
+        const ccLastDate = new Date(currentYear, currentMonth + 1, 0);
+        const ccLastISO = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(ccLastDate.getDate()).padStart(2, '0')}`;
+        const ccDayMap = buildCcDayMap(ccFirstISO, ccLastISO);
 
         let html = '<table class="calendar-table">';
         html += `<thead>
@@ -2326,6 +2375,13 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 
                     html += '<td>';
                     html += `<div class="date-row">${currentMonth + 1}/${currentDay}</div>`;
+                    const ccList = ccDayMap[dateStr] || [];
+                    if (ccList.length) {
+                        const hintText = ccList.map(s => s.paidAbsence ? (s.name + '💰') : s.name).join('、');
+                        html += `<div class="day-hint" title="課程行事曆排課：${hintText}">${hintText}</div>`;
+                    } else {
+                        html += `<div class="day-hint empty">　</div>`;
+                    }
                     for (let j = 0; j < 6; j++) {
                         let val = incomeData[dateStr][j] || '';
                         const hasValueClass = String(val).trim().endsWith('*') ? ' has-value' : '';
@@ -2343,6 +2399,47 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         html += '</tbody></table>';
         document.getElementById('calendar-area').innerHTML = html;
         calculateTotals();
+        // 切月份之後，上次對帳檢查的結果是另一個月份的，先收起來避免誤會
+        const rcEl = document.getElementById('reconcileResult');
+        if (rcEl) rcEl.style.display = 'none';
+    }
+
+    /* 對帳檢查：比對本月「課程行事曆」每天實際排的堂數（不含請假），
+       跟「每日上課收入」這天已經填了幾格非空白的金額，列出不一致的日期。
+       純粹唯讀比對，不會動到任何一邊的資料。 */
+    function runReconcileCheck() {
+        const rcEl = document.getElementById('reconcileResult');
+        if (typeof window.ccGetOccurrencesInRange !== 'function') {
+            rcEl.innerHTML = '<div class="rc-title">⚠️ 讀不到課程行事曆的資料</div><div class="rc-row">請先登入，並確認「課程行事曆」分頁至少載入過一次，再回來試一次。</div>';
+            rcEl.style.display = 'block';
+            return;
+        }
+        const firstISO = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
+        const lastDate = new Date(currentYear, currentMonth + 1, 0);
+        const lastISO = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(lastDate.getDate()).padStart(2, '0')}`;
+        const dayMap = buildCcDayMap(firstISO, lastISO);
+
+        const mismatches = [];
+        for (let d = 1; d <= lastDate.getDate(); d++) {
+            const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const expected = (dayMap[dateStr] || []).length;
+            const slots = incomeData[dateStr] || [];
+            const filled = slots.filter(v => String(v || '').trim() !== '').length;
+            if (expected !== filled) {
+                mismatches.push({ dateStr, label: `${currentMonth + 1}/${d}`, expected, filled });
+            }
+        }
+
+        if (mismatches.length === 0) {
+            rcEl.innerHTML = '<div class="rc-title">✓ 對帳檢查完成</div><div class="rc-row rc-ok">這個月每一天的行事曆堂數跟已填筆數都一致，沒有發現不一致的日期。</div>';
+        } else {
+            let rows = mismatches.map(m => {
+                const hint = m.expected > m.filled ? '可能少填了' : '填的比排課多，確認一下';
+                return `<div class="rc-row"><span>${m.label}</span><span>行事曆 ${m.expected} 堂　實際填 ${m.filled} 筆　（${hint}）</span></div>`;
+            }).join('');
+            rcEl.innerHTML = `<div class="rc-title">🔍 對帳檢查：發現 ${mismatches.length} 天不一致</div>${rows}`;
+        }
+        rcEl.style.display = 'block';
     }
 
     function updateIncomeValue(inputElem) {
@@ -6242,6 +6339,7 @@ let blocks = [];
 let viewDate = new Date();
 let currentDayISO = null;
 let filterStudentIds = null;     // null = 不篩選（全顯示）；否則是 Set
+let showLeaveCourses = false;    // 請假的課預設隱藏，勾選篩選面板裡的選項才會顯示出來（畫面顯示用，不影響資料本身）
 
 let sheetMode = "create";        // create | series | occurrence | block-create | block-edit
 let editingEventId = null;
@@ -6334,7 +6432,7 @@ function expandEvent(ev, rangeStartISO, rangeEndISO){
     if(ev.date>=rangeStartISO && ev.date<=rangeEndISO){
       out.push({eventId:ev.id, studentId:ev.studentId, date:ev.date, originalDate:ev.date,
         startTime:ev.startTime, endTime:ev.endTime, moved:false,
-        paidAbsence:!!ev.paidAbsence, notes:ev.notes});
+        paidAbsence:!!ev.paidAbsence, leave:!!ev.leave, notes:ev.notes});
     }
     return out;
   }
@@ -6353,9 +6451,10 @@ function expandEvent(ev, rangeStartISO, rangeEndISO){
         const endTime = (ov && ov.endTime) || r.endTime;
         const moved = !!(ov && (ov.date || ov.startTime));
         const paidAbsence = !!(ov && ov.paidAbsence);
+        const leave = !!(ov && ov.leave);
         if(date>=rangeStartISO && date<=rangeEndISO){
           out.push({eventId:ev.id, studentId:ev.studentId, date, originalDate:iso,
-            startTime, endTime, moved, paidAbsence, notes:ev.notes});
+            startTime, endTime, moved, paidAbsence, leave, notes:ev.notes});
         }
       }
     }
@@ -6389,6 +6488,12 @@ function blocksOnDate(iso){
 
 function isStudentVisible(studentId){
   return !filterStudentIds || filterStudentIds.has(studentId);
+}
+/* 請假的課預設不顯示在行事曆上（資料還在，只是畫面上先隱藏），勾選篩選面板的「顯示請假課程」才會出現 */
+function isOccVisible(o){
+  if(!isStudentVisible(o.studentId)) return false;
+  if(o.leave && !showLeaveCourses) return false;
+  return true;
 }
 
 /* ================= 月檢視渲染 ================= */
@@ -6429,7 +6534,7 @@ function renderMonth(){
       cell.appendChild(banner);
     });
 
-    const dayOcc = occ.filter(o=>o.date===iso && isStudentVisible(o.studentId))
+    const dayOcc = occ.filter(o=>o.date===iso && isOccVisible(o))
       .sort((a,b)=>minutesOf(a.startTime)-minutesOf(b.startTime));
     const shown = dayOcc.slice(0,3);
     shown.forEach(o=>{
@@ -6437,7 +6542,7 @@ function renderMonth(){
       const conflicts = findConflicts(occ, o.date, o.startTime, o.endTime, o.eventId, o.originalDate);
       const hasBlock = blocksOnDate(o.date).length>0;
       const chip = document.createElement("div");
-      chip.className = "cc-chip"+(o.paidAbsence?" paid-absence":"");
+      chip.className = "cc-chip"+(o.paidAbsence?" paid-absence":"")+(o.leave?" leave":"");
       chip.style.background = st ? st.color : "#888";
       chip.dataset.eventId = o.eventId;
       chip.dataset.date = o.date;
@@ -6447,6 +6552,7 @@ function renderMonth(){
       nameSpan.textContent = st?st.name:"?";
       chip.appendChild(nameSpan);
       if(o.paidAbsence){ const p=document.createElement("span"); p.textContent="💰"; chip.appendChild(p); }
+      if(o.leave){ const lv=document.createElement("span"); lv.textContent="💤"; chip.appendChild(lv); }
       if(conflicts.length){ const w=document.createElement("span"); w.className="warn"; w.textContent="⚠️"; chip.appendChild(w); }
       if(hasBlock){ const t=document.createElement("span"); t.className="trip"; t.textContent="✈️"; chip.appendChild(t); }
 
@@ -6634,7 +6740,7 @@ function renderDayView(){
   });
 
   const occ = expandAll(currentDayISO, currentDayISO);
-  const dayOcc = occ.filter(o=>o.date===currentDayISO && isStudentVisible(o.studentId))
+  const dayOcc = occ.filter(o=>o.date===currentDayISO && isOccVisible(o))
     .sort((a,b)=>minutesOf(a.startTime)-minutesOf(b.startTime));
 
   const list = document.getElementById("agendaList");
@@ -6655,7 +6761,7 @@ function renderDayView(){
     const h = Math.max(AGENDA_MIN_H, Math.min(AGENDA_MAX_H, duration*AGENDA_SCALE));
 
     const card = document.createElement("div");
-    card.className = "cc-agenda-card"+(o.paidAbsence?" paid-absence":"");
+    card.className = "cc-agenda-card"+(o.paidAbsence?" paid-absence":"")+(o.leave?" leave":"");
     card.style.background = st?st.color:"#888";
     card.style.height = h+"px";
 
@@ -6664,6 +6770,7 @@ function renderDayView(){
     const nameSpan = document.createElement("span"); nameSpan.className="name-text"; nameSpan.textContent = st?st.name:"?";
     n.appendChild(nameSpan);
     if(o.paidAbsence){ const p=document.createElement("span"); p.textContent="💰"; n.appendChild(p); }
+    if(o.leave){ const lv=document.createElement("span"); lv.textContent="💤"; n.appendChild(lv); }
     if(conflicts.length){ const w=document.createElement("span"); w.textContent="⚠️"; n.appendChild(w); }
     if(hasBlock){ const tr=document.createElement("span"); tr.textContent="✈️"; n.appendChild(tr); }
     card.appendChild(t); card.appendChild(n);
@@ -6728,6 +6835,7 @@ function openCreateSheet(prefillDate){
   document.getElementById("fRecurring").checked = false;
   document.getElementById("fSeriesEnd").value = "";
   document.getElementById("fPaidAbsence").checked = false;
+  document.getElementById("fLeave").checked = false;
   document.getElementById("fNotes").value = "";
   document.querySelectorAll("#weekdayPicker button").forEach(b=>b.classList.remove("on"));
   document.getElementById("dateFieldWrap").style.display = "block";
@@ -6773,6 +6881,7 @@ function openSeriesEdit(eventId){
     document.getElementById("fSeriesEnd").value = "";
     document.getElementById("paidAbsenceWrap").style.display = "block";
     document.getElementById("fPaidAbsence").checked = !!ev.paidAbsence;
+    document.getElementById("fLeave").checked = !!ev.leave;
     document.querySelectorAll("#weekdayPicker button").forEach(b=>b.classList.remove("on"));
   }
   document.getElementById("eventOverlay").classList.add("active");
@@ -6794,7 +6903,7 @@ function openOccurrenceEdit(eventId, originalDate){
 
   const occ = expandAll(originalDate, addDaysISO(originalDate, 1));
   const occurrence = occ.find(o=>o.eventId===eventId && o.originalDate===originalDate) ||
-    { startTime: ev.recurrence.startTime, endTime: ev.recurrence.endTime, paidAbsence:false };
+    { startTime: ev.recurrence.startTime, endTime: ev.recurrence.endTime, paidAbsence:false, leave:false };
 
   document.getElementById("eventSheetTitle").textContent = "編輯這一次課程";
   document.getElementById("fStart").value = occurrence.startTime;
@@ -6804,6 +6913,7 @@ function openOccurrenceEdit(eventId, originalDate){
   document.getElementById("recurringBlockWrap").style.display = "none";
   document.getElementById("paidAbsenceWrap").style.display = "block";
   document.getElementById("fPaidAbsence").checked = !!occurrence.paidAbsence;
+  document.getElementById("fLeave").checked = !!occurrence.leave;
   document.getElementById("btnDeleteEvent").style.display = "inline-block";
   document.getElementById("btnEditSeriesLink").style.display = "block";
   document.getElementById("btnDuplicate").style.display = "block";
@@ -6852,6 +6962,7 @@ function saveEventFromForm(){
   const end = document.getElementById("fEnd").value;
   const notes = document.getElementById("fNotes").value;
   const paidAbsence = document.getElementById("fPaidAbsence").checked;
+  const leave = document.getElementById("fLeave").checked;
 
   if(sheetMode==="occurrence"){
     const ev = events.find(x=>x.id===editingEventId);
@@ -6863,7 +6974,7 @@ function saveEventFromForm(){
     const apply = ()=>{
       ev.overrides = ev.overrides || {};
       const prev = ev.overrides[editingOriginalDate] || {};
-      ev.overrides[editingOriginalDate] = {...prev, startTime:start, endTime:end, paidAbsence};
+      ev.overrides[editingOriginalDate] = {...prev, startTime:start, endTime:end, paidAbsence, leave};
       ev.notes = notes;
       persistEvent(ev);
       closeEventSheet();
@@ -6895,9 +7006,9 @@ function saveEventFromForm(){
   if(isRecurring){
     ev.recurrence = {byDay, startTime:start, endTime:end,
       seriesStart: ev.recurrence?.seriesStart || todayISO(), seriesEnd};
-    delete ev.date; delete ev.startTime; delete ev.endTime; delete ev.paidAbsence;
+    delete ev.date; delete ev.startTime; delete ev.endTime; delete ev.paidAbsence; delete ev.leave;
   }else{
-    ev.date = date; ev.startTime = start; ev.endTime = end; ev.paidAbsence = paidAbsence;
+    ev.date = date; ev.startTime = start; ev.endTime = end; ev.paidAbsence = paidAbsence; ev.leave = leave;
     delete ev.recurrence;
   }
 
@@ -7163,6 +7274,14 @@ document.querySelectorAll("#kindToggle button").forEach(b=>{
     document.getElementById("dateFieldWrap").style.display = e.target.checked ? "none" : "block";
     document.getElementById("paidAbsenceWrap").style.display = e.target.checked ? "none" : "block";
   });
+
+  // 「沒上課有付錢」跟「請假」互斥：勾一個就自動取消另一個
+  document.getElementById("fPaidAbsence").addEventListener("change", (e)=>{
+    if(e.target.checked) document.getElementById("fLeave").checked = false;
+  });
+  document.getElementById("fLeave").addEventListener("change", (e)=>{
+    if(e.target.checked) document.getElementById("fPaidAbsence").checked = false;
+  });
   document.querySelectorAll("#weekdayPicker button").forEach(b=>{
     b.addEventListener("click", ()=> b.classList.toggle("on"));
   });
@@ -7257,8 +7376,13 @@ document.querySelectorAll("#kindToggle button").forEach(b=>{
 
   document.getElementById("btnFilter").onclick = ()=>{
     renderFilterPanel();
+    document.getElementById("filterShowLeave").checked = showLeaveCourses;
     document.getElementById("filterOverlay").classList.add("active");
   };
+  document.getElementById("filterShowLeave").addEventListener("change", (e)=>{
+    showLeaveCourses = e.target.checked;
+    renderCurrentView();
+  });
   document.getElementById("btnCloseFilter").onclick = ()=>{
     document.getElementById("filterOverlay").classList.remove("active");
     renderCurrentView();
@@ -7314,6 +7438,25 @@ window.ccOnLogin = function(user){
 };
 window.ccOnLogout = function(){
   ccUid = null;
+};
+/* 給「每日上課收入」分頁唯讀查詢用：某段期間內每一天實際排了哪些課（已套用 overrides，
+   包含 paidAbsence／leave 旗標），只是讀取記憶體裡現有的 students/events，不會另外打 Firestore，
+   也完全不會寫回任何資料。課程行事曆分頁本身要不要顯示請假課程，由 showLeaveCourses 單獨控制，
+   不影響這裡回傳的內容（這裡回傳的是「資料上」的全部場次，請假與否由呼叫端自己判斷要不要用）。 */
+window.ccGetOccurrencesInRange = function(rangeStartISO, rangeEndISO){
+  try{
+    return expandAll(rangeStartISO, rangeEndISO).map(o=>{
+      const st = studentById(o.studentId);
+      return {
+        studentId: o.studentId, studentName: st ? st.name : "?",
+        date: o.date, startTime: o.startTime, endTime: o.endTime,
+        paidAbsence: !!o.paidAbsence, leave: !!o.leave,
+      };
+    });
+  }catch(e){
+    console.error('課程行事曆：ccGetOccurrencesInRange 失敗', e);
+    return [];
+  }
 };
 
 })();
