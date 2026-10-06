@@ -685,6 +685,14 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
     .input-cell.has-value{background:#e8934a;}
     .input-cell.has-value input{color:#3a2408;}
     .input-cell.has-value input:focus{background-color:#f3ac6e;}
+    /* 當天 6 格都填滿時才出現的「＋」：再多加一格（超過 6 堂的日子才會用到） */
+    .income-add-slot{
+        display:block; width:calc(100% - 4px); height:16px; margin:1px 2px 0; padding:0; line-height:14px;
+        font-size:12px; font-family:inherit; color:var(--forest-mid); background:transparent;
+        border:1px dashed var(--forest-line); border-radius:4px; cursor:pointer;
+    }
+    .income-add-slot:hover{background:var(--forest-gold-pale); border-color:var(--forest-mid);}
+    .income-add-slot[hidden]{display:none;}
     .empty-day{background:#efece0;}
     /* 「課程行事曆」當天排課小提示（唯讀，不是輸入格） */
     .day-hint{
@@ -2397,11 +2405,11 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
                     } else {
                         html += `<div class="day-hint empty">　</div>`;
                     }
-                    for (let j = 0; j < 6; j++) {
-                        let val = incomeData[dateStr][j] || '';
-                        const hasValueClass = String(val).trim().endsWith('*') ? ' has-value' : '';
-                        html += `<div class="input-cell${hasValueClass}"><input type="text" inputmode="decimal" data-date="${dateStr}" data-index="${j}" value="${val}" oninput="updateIncomeValue(this)" onwheel="this.blur()"></div>`;
+                    const slotCount = incomeSlotCount(dateStr);
+                    for (let j = 0; j < slotCount; j++) {
+                        html += incomeCellHtml(dateStr, j);
                     }
+                    html += `<button type="button" class="income-add-slot" data-date="${dateStr}" onclick="addIncomeSlot('${dateStr}')" title="這天超過 6 堂，再加一格" aria-label="再加一格"${incomeDayAllFilled(dateStr) ? '' : ' hidden'}>＋</button>`;
                     html += '</td>';
                     currentDay++;
                 }
@@ -2457,6 +2465,89 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         rcEl.style.display = 'block';
     }
 
+    /* ===== 每天可變格數：預設 6 格，只有「當天格子全部填滿」時才會出現 ＋ 再多一格 =====
+       incomeExtraOpen 只記在記憶體：按 ＋ 之後、還沒填內容之前，先讓那一格留在畫面上；
+       離開那一格時如果還是空的，就會自動收回去（見 trimIncomeExtraSlots）。 */
+    const INCOME_BASE_SLOTS = 6;
+    const incomeExtraOpen = {};
+
+    function incomeLastFilledIndex(dateStr) {
+        const arr = incomeData[dateStr] || [];
+        for (let i = arr.length - 1; i >= 0; i--) {
+            if (String(arr[i] === undefined || arr[i] === null ? '' : arr[i]).trim() !== '') return i;
+        }
+        return -1;
+    }
+
+    function incomeSlotCount(dateStr) {
+        return Math.max(INCOME_BASE_SLOTS, incomeLastFilledIndex(dateStr) + 1, incomeExtraOpen[dateStr] || 0);
+    }
+
+    function incomeDayAllFilled(dateStr) {
+        const n = incomeSlotCount(dateStr);
+        const arr = incomeData[dateStr] || [];
+        for (let i = 0; i < n; i++) {
+            if (String(arr[i] === undefined || arr[i] === null ? '' : arr[i]).trim() === '') return false;
+        }
+        return true;
+    }
+
+    function incomeCellHtml(dateStr, j) {
+        const val = (incomeData[dateStr] && incomeData[dateStr][j]) || '';
+        const hasValueClass = String(val).trim().endsWith('*') ? ' has-value' : '';
+        return `<div class="input-cell${hasValueClass}"><input type="text" inputmode="decimal" data-date="${dateStr}" data-index="${j}" value="${val}" oninput="updateIncomeValue(this)" onwheel="this.blur()"></div>`;
+    }
+
+    function refreshIncomeAddButton(dateStr) {
+        const btn = document.querySelector(`.income-add-slot[data-date="${dateStr}"]`);
+        if (btn) btn.hidden = !incomeDayAllFilled(dateStr);
+    }
+
+    function addIncomeSlot(dateStr) {
+        if (!incomeData[dateStr]) incomeData[dateStr] = ['', '', '', '', '', ''];
+        const n = incomeSlotCount(dateStr);
+        while (incomeData[dateStr].length < n + 1) incomeData[dateStr].push('');
+        incomeExtraOpen[dateStr] = n + 1;
+        const btn = document.querySelector(`.income-add-slot[data-date="${dateStr}"]`);
+        if (!btn) return;
+        btn.insertAdjacentHTML('beforebegin', incomeCellHtml(dateStr, n));
+        btn.hidden = true;
+        const input = findIncomeInput(dateStr, n);
+        if (input) input.focus();
+    }
+
+    /* 離開某一格時：把「第 6 格以後、而且尾端是空白」的格子收回去（資料與畫面都一起收），
+       只會收尾端的空格，中間空著的格子不動，避免後面的堂序被往前擠。 */
+    function trimIncomeExtraSlots(dateStr) {
+        const arr = incomeData[dateStr];
+        if (!arr) return;
+        const keep = Math.max(INCOME_BASE_SLOTS, incomeLastFilledIndex(dateStr) + 1);
+        // 以「畫面上實際有幾格」為準（使用者剛清空的那格，資料已經是空的，但畫面上還在）
+        const domCount = document.querySelectorAll(`#calendar-area .input-cell input[data-date="${dateStr}"]`).length;
+        delete incomeExtraOpen[dateStr];
+        let changed = false;
+        if (arr.length > keep) { arr.length = keep; changed = true; }
+        for (let j = domCount - 1; j >= keep; j--) {
+            const input = findIncomeInput(dateStr, j);
+            if (input && input.closest('.input-cell')) input.closest('.input-cell').remove();
+        }
+        if (domCount > keep || changed) refreshIncomeAddButton(dateStr);
+        if (changed) saveIncomeData();
+    }
+
+    document.addEventListener('focusout', function (e) {
+        const t = e.target;
+        if (!t || !t.matches || !t.matches('#calendar-area .input-cell input')) return;
+        const date = t.getAttribute('data-date');
+        if (!date) return;
+        // 等焦點真的落到別處再收（Enter 往下移動時，目標格已經取得焦點）
+        setTimeout(function () {
+            const active = document.activeElement;
+            if (active && active.matches && active.matches('#calendar-area .input-cell input[data-date="' + date + '"]')) return;
+            trimIncomeExtraSlots(date);
+        }, 0);
+    });
+
     function updateIncomeValue(inputElem) {
         const date = inputElem.getAttribute('data-date');
         const index = inputElem.getAttribute('data-index');
@@ -2467,6 +2558,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
             if (inputElem.value.trim().endsWith('*')) cell.classList.add('has-value');
             else cell.classList.remove('has-value');
         }
+        refreshIncomeAddButton(date);
         saveIncomeData();
     }
 
@@ -2529,10 +2621,11 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
                     if (!dateStr) return;
 
                     if (!incomeData[dateStr]) incomeData[dateStr] = ['', '', '', '', '', ''];
-                    const slot = incomeData[dateStr].findIndex(v => v === '' || v === null || v === undefined);
+                    let slot = incomeData[dateStr].findIndex(v => v === '' || v === null || v === undefined);
                     if (slot === -1) {
-                        skippedCount++;
-                        return;
+                        // 當天已滿：直接往後多加一格（超過 6 堂的日子），不再略過
+                        incomeData[dateStr].push('');
+                        slot = incomeData[dateStr].length - 1;
                     }
                     incomeData[dateStr][slot] = String(amtVal).trim();
                     importCount++;
@@ -2541,7 +2634,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
                 saveIncomeData();
                 renderCalendar();
                 let msg = `已匯入 ${importCount} 筆每日收入紀錄。`;
-                if (skippedCount > 0) msg += `\n有 ${skippedCount} 筆因當天已滿 6 筆而略過，請手動確認並補上。`;
+                if (skippedCount > 0) msg += `\n有 ${skippedCount} 筆被略過，請手動確認並補上。`;
                 alert(msg);
             } catch (err) {
                 console.error(err);
@@ -2571,18 +2664,28 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         const idx = parseInt(input.getAttribute('data-index'), 10);
         let target = null;
 
+        const lastIdxOf = d => document.querySelectorAll(`.input-cell input[data-date="${d}"]`).length - 1;
+        // 左右移到隔壁天：如果隔壁天格數比較少，就停在它的最後一格
+        const sideTarget = d => {
+            const n = lastIdxOf(d);
+            return n < 0 ? null : findIncomeInput(d, Math.min(idx, n));
+        };
         if (e.key === 'Enter' || e.key === 'ArrowDown') {
             e.preventDefault();
-            target = (idx < 5) ? findIncomeInput(date, idx + 1) : findIncomeInput(shiftDateStr(date, 1), 0);
+            target = (idx < lastIdxOf(date)) ? findIncomeInput(date, idx + 1) : findIncomeInput(shiftDateStr(date, 1), 0);
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
-            target = (idx > 0) ? findIncomeInput(date, idx - 1) : findIncomeInput(shiftDateStr(date, -1), 5);
+            if (idx > 0) target = findIncomeInput(date, idx - 1);
+            else {
+                const prev = shiftDateStr(date, -1);
+                target = findIncomeInput(prev, lastIdxOf(prev));
+            }
         } else if (e.key === 'ArrowLeft') {
             e.preventDefault();
-            target = findIncomeInput(shiftDateStr(date, -1), idx);
+            target = sideTarget(shiftDateStr(date, -1));
         } else if (e.key === 'ArrowRight') {
             e.preventDefault();
-            target = findIncomeInput(shiftDateStr(date, 1), idx);
+            target = sideTarget(shiftDateStr(date, 1));
         }
 
         if (target) {
@@ -3065,19 +3168,25 @@ ${recentTrend.join('\n')}
         bodyRows.forEach(tr => {
             const cells = tr.querySelectorAll('td');
             const dateRow = [];
-            const incomeRows = [[], [], [], [], [], []];
+            // 這一週裡「格數最多的那天」決定要輸出幾列（至少 6 列），超過 6 堂的日子才不會在匯出時被截掉
+            let rowsNeeded = 6;
+            cells.forEach((td, idx) => {
+                if (idx === 7 || td.classList.contains('empty-day')) return;
+                rowsNeeded = Math.max(rowsNeeded, td.querySelectorAll('.input-cell input').length);
+            });
+            const incomeRows = Array.from({ length: rowsNeeded }, () => []);
             let weeklyTotal = '';
             cells.forEach((td, idx) => {
                 if (idx === 7) { weeklyTotal = td.textContent.trim(); return; }
                 if (td.classList.contains('empty-day')) {
                     dateRow.push('');
-                    for (let s = 0; s < 6; s++) incomeRows[s].push('');
+                    for (let s = 0; s < rowsNeeded; s++) incomeRows[s].push('');
                     return;
                 }
                 const dateDiv = td.querySelector('.date-row');
                 dateRow.push(dateDiv ? dateDiv.textContent.trim() : '');
                 const inputs = td.querySelectorAll('.input-cell input');
-                for (let s = 0; s < 6; s++) incomeRows[s].push(inputs[s] ? inputs[s].value : '');
+                for (let s = 0; s < rowsNeeded; s++) incomeRows[s].push(inputs[s] ? inputs[s].value : '');
             });
             aoa.push(dateRow.concat(['']));
             incomeRows.forEach((r, i) => aoa.push(r.concat([i === 0 ? weeklyTotal : ''])));
@@ -3119,19 +3228,27 @@ ${recentTrend.join('\n')}
 
         while (currentDay <= lastDay.getDate()) {
             const dateRow = [];
-            const incomeRows = [[], [], [], [], [], []];
+            // 先掃這一週，找出「格數最多的那天」決定輸出幾列（至少 6 列），超過 6 堂的日子才不會被截掉
+            let rowsNeeded = 6;
+            for (let i = 1, d = currentDay; i <= 7 && d <= lastDay.getDate(); i++) {
+                if (isFirstWeek && i < startDayOfWeek) continue;
+                const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                rowsNeeded = Math.max(rowsNeeded, (incomeData[ds] || []).length);
+                d++;
+            }
+            const incomeRows = Array.from({ length: rowsNeeded }, () => []);
             let weekTotal = 0;
             let weekHasValue = false;
 
             for (let i = 1; i <= 7; i++) {
                 if ((isFirstWeek && i < startDayOfWeek) || currentDay > lastDay.getDate()) {
                     dateRow.push('');
-                    for (let s = 0; s < 6; s++) incomeRows[s].push('');
+                    for (let s = 0; s < rowsNeeded; s++) incomeRows[s].push('');
                 } else {
                     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
                     dateRow.push(`${month + 1}/${currentDay}`);
                     const values = incomeData[dateStr] || ['', '', '', '', '', ''];
-                    for (let s = 0; s < 6; s++) {
+                    for (let s = 0; s < rowsNeeded; s++) {
                         const raw = values[s] || '';
                         incomeRows[s].push(raw);
                         const num = parseFloat(raw);
