@@ -685,14 +685,6 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
     .input-cell.has-value{background:#e8934a;}
     .input-cell.has-value input{color:#3a2408;}
     .input-cell.has-value input:focus{background-color:#f3ac6e;}
-    /* 當天 6 格都填滿時才出現的「＋」：再多加一格（超過 6 堂的日子才會用到） */
-    .income-add-slot{
-        display:block; width:calc(100% - 4px); height:16px; margin:1px 2px 0; padding:0; line-height:14px;
-        font-size:12px; font-family:inherit; color:var(--forest-mid); background:transparent;
-        border:1px dashed var(--forest-line); border-radius:4px; cursor:pointer;
-    }
-    .income-add-slot:hover{background:var(--forest-gold-pale); border-color:var(--forest-mid);}
-    .income-add-slot[hidden]{display:none;}
     .empty-day{background:#efece0;}
     /* 「課程行事曆」當天排課小提示（唯讀，不是輸入格） */
     .day-hint{
@@ -1142,6 +1134,8 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 /* 整體排版：主內容在左，功能列固定在右側 */
 #view-coursecal .cc-layout{display:flex;gap:12px;align-items:flex-start;}
 #view-coursecal .cc-main-col{flex:1;min-width:0;}
+#view-coursecal .cc-tt-bar{margin:0 0 6px;min-height:16px;}
+#view-coursecal .cc-allday-banner{font-size:10.5px;background:var(--cc-panel-2);color:var(--cc-text-dim);border-radius:4px;padding:1px 4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #view-coursecal .cc-side-toolbar{
   display:flex;flex-direction:column;gap:8px;flex:0 0 92px;
   position:sticky;top:8px;
@@ -1529,6 +1523,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 
   <div class="cc-layout">
     <div class="cc-main-col">
+      <div class="cc-tt-bar" id="ccTtBar"><span id="ccTtStatus" class="tt-status"></span></div>
       <!-- MONTH VIEW -->
       <div class="cc-month-view" id="monthView">
         <div class="cc-topbar" style="padding-top:0">
@@ -1566,7 +1561,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
       </div>
 
       <div class="cc-notice">僅台灣時間 · 衝堂＝任何時段重疊</div>
-      <div class="cc-ics-box">
+      <div class="cc-ics-box" id="ccIcsBox">
         訂閱到手機行事曆（TimeTree／iOS 行事曆等支援 ICS 訂閱的 App）：<br>
         <code id="ccIcsUrl">請先登入後查看訂閱連結</code>
         <button class="cc-iconbtn" id="ccCopyIcsBtn" style="font-size:10px;padding:3px 7px;margin-left:4px;">複製</button>
@@ -1575,6 +1570,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 
     <!-- 側邊功能列：篩選／學生／月檢視／日檢視 -->
     <div class="cc-side-toolbar">
+      <button class="cc-iconbtn cc-side-btn" id="btnSource" title="切換要看 TimeTree 課表，還是網頁上自己排的行事曆">🔁 來源：TimeTree</button>
       <button class="cc-iconbtn cc-side-btn" id="btnFilter">🔍 篩選</button>
       <button class="cc-iconbtn cc-side-btn" id="btnStudents">👤 學生</button>
       <button class="cc-iconbtn cc-side-btn" id="btnViewMonth">📅 月</button>
@@ -1799,9 +1795,10 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
                 <button class="btn-cal-import" onclick="document.getElementById('calendarImportInput').click()">📥 匯入每日紀錄</button>
                 <button class="btn-cal-import" onclick="exportCalendarExcel()">📤 匯出 Excel（本月）</button>
                 <button class="btn-cal-import" onclick="exportCalendarExcelAllMonths()">📤 匯出 Excel（全部月份）</button>
-                <button class="btn-cal-import" id="btnReconcileCheck" onclick="runReconcileCheck()" title="比對本月「課程行事曆」排的堂數跟這裡已填的筆數">🔍 對帳檢查</button>
+                <button class="btn-cal-import" id="btnReconcileCheck" onclick="runReconcileCheck()" title="比對本月 TimeTree「課表」排的堂數跟這裡已填的筆數">🔍 對帳檢查</button>
                 <input type="file" id="calendarImportInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importCalendarIncome(event)">
             </div>
+            <div id="incomeTtStatus" class="tt-status" style="margin:-4px 0 8px;"></div>
             <div id="reconcileResult" style="display:none;"></div>
             <div id="calendar-area"></div>
             <div class="summary-container">
@@ -1834,21 +1831,6 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         支援 .xlsx / .xls / .csv，會自動辨識「收款日、學生、每堂收費、匯入金額、實收金額、匯率、台幣、換算台幣、購買堂數、匯款方式、備考」等欄位標題並附加到下方紀錄後面<br>
         每次新增／修改／刪除紀錄後，會自動把每個月「換算台幣」總額同步到生活帳本 moneybook 的「華語文教學」收入（需先在上方登入生活帳本帳號）。<br>
         「匯率」欄位（美金列）可直接在表格內逐筆修改：新增紀錄時預設帶入 29，之後每一筆都可以改成當次實際換匯的匯率。
-    </div>
-
-    <div class="record-filter-bar" style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; background:var(--forest-pale); border:1px solid var(--forest-line); border-radius:10px; padding:10px 14px; margin-bottom:12px;">
-        <div style="display:flex; align-items:center; gap:6px;">
-            <label for="recordFilterStudent" style="font-size:12px; color:var(--forest-bark); white-space:nowrap;">學生／關鍵字</label>
-            <input type="text" id="recordFilterStudent" placeholder="例：Mirna 或 字體捐款" oninput="applyRecordFilter()" style="font-size:12px; padding:5px 8px; border-radius:6px; border:1px solid var(--forest-line); font-family:inherit;">
-        </div>
-        <div style="display:flex; align-items:center; gap:6px;">
-            <label for="recordFilterFrom" style="font-size:12px; color:var(--forest-bark); white-space:nowrap;">起</label>
-            <input type="date" id="recordFilterFrom" onchange="applyRecordFilter()" style="font-size:12px; padding:5px 8px; border-radius:6px; border:1px solid var(--forest-line); font-family:inherit;">
-            <label for="recordFilterTo" style="font-size:12px; color:var(--forest-bark); white-space:nowrap;">迄</label>
-            <input type="date" id="recordFilterTo" onchange="applyRecordFilter()" style="font-size:12px; padding:5px 8px; border-radius:6px; border:1px solid var(--forest-line); font-family:inherit;">
-        </div>
-        <button type="button" class="btn" style="padding:5px 12px; font-size:12px;" onclick="clearRecordFilter()">清除篩選</button>
-        <div id="recordFilterSummary" style="font-size:12px; color:var(--forest-deep); font-weight:700; margin-left:auto;"></div>
     </div>
 
     <div class="record-table-wrap" id="recordTableWrap" tabindex="-1">
@@ -2342,21 +2324,66 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         renderCalendar();
     }
 
-    /* 從「課程行事曆」取得某段期間內每一天排了哪些學生（唯讀，不會寫回行事曆）。
-       請假的課程視為「沒上到課」，不算進提示跟對帳；行事曆分頁自己要不要顯示請假課程是另一件事，不影響這裡。
-       回傳：{ 'YYYY-MM-DD': [{name, paidAbsence}, ...] } */
+    /* 從 TimeTree「課表」取得某段期間內每一天排了哪些課（唯讀；資料由 GitHub Actions 每 3 小時同步進 Firebase）。
+       網頁上標記「請假」的課視為沒上到課，不算進提示跟對帳；整天行程（不是課）也不算。
+       回傳：{ 'YYYY-MM-DD': [{key, name, paidAbsence}, ...] } */
     function buildCcDayMap(rangeStartISO, rangeEndISO) {
         const map = {};
-        if (typeof window.ccGetOccurrencesInRange !== 'function') return map;
+        if (typeof window.ttGetOccurrencesInRange !== 'function') return map;
         let occ = [];
-        try { occ = window.ccGetOccurrencesInRange(rangeStartISO, rangeEndISO) || []; }
-        catch (e) { console.error('讀取課程行事曆資料失敗', e); return map; }
+        try { occ = window.ttGetOccurrencesInRange(rangeStartISO, rangeEndISO) || []; }
+        catch (e) { console.error('讀取 TimeTree 課表失敗', e); return map; }
+        occ.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
         occ.forEach(o => {
-            if (o.leave) return; // 請假＝沒上到課，不算
+            if (o.allDay) return;  // 整天行程不是課
+            if (o.leave) return;   // 請假＝沒上到課，不算
             if (!map[o.date]) map[o.date] = [];
-            map[o.date].push({ name: o.studentName, paidAbsence: !!o.paidAbsence });
+            map[o.date].push({ key: o.key, name: o.title || '?', paidAbsence: !!o.paidAbsence });
         });
         return map;
+    }
+
+    function escapeHintText(t) {
+        return String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    /* 某一天的排課提示：有課（或當天有被標成請假的課）就可以點，點了開標記視窗 */
+    function dayHintInfo(dateStr, dayMap) {
+        const list = dayMap[dateStr] || [];
+        const all = (typeof window.ttGetOccurrencesInRange === 'function')
+            ? window.ttGetOccurrencesInRange(dateStr, dateStr).filter(o => !o.allDay) : [];
+        const leaveCount = all.filter(o => o.leave).length;
+        let text = list.map(s => s.paidAbsence ? (s.name + '💰') : s.name).join('、');
+        if (leaveCount) text += (text ? '　' : '') + '💤' + leaveCount;
+        return { text, clickable: all.length > 0 };
+    }
+
+    /* TimeTree 資料或標記有變動時，只更新提示列，不重畫整個月曆（避免打字打到一半被打斷） */
+    function refreshDayHints() {
+        const area = document.getElementById('calendar-area');
+        const statusEl = document.getElementById('incomeTtStatus');
+        if (typeof window.ttRenderStatus === 'function') window.ttRenderStatus(statusEl);
+        if (!area) return;
+        const hints = area.querySelectorAll('.day-hint[data-date]');
+        if (!hints.length) return;
+        const firstISO = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
+        const lastD = new Date(currentYear, currentMonth + 1, 0);
+        const lastISO = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(lastD.getDate()).padStart(2, '0')}`;
+        const dayMap = buildCcDayMap(firstISO, lastISO);
+        hints.forEach(el => {
+            const info = dayHintInfo(el.dataset.date, dayMap);
+            el.textContent = info.text || '　';
+            el.title = info.clickable ? ('TimeTree 課表：' + info.text + '（點一下可標記請假／沒上課有付錢）') : '';
+            el.classList.toggle('empty', !info.text);
+            el.classList.toggle('clickable', info.clickable);
+        });
+    }
+    // TimeTree 的程式載入得比這裡晚，所以先排進等候清單，由它載入後接手
+    (window.ttPendingSubscribers = window.ttPendingSubscribers || []).push(refreshDayHints);
+
+    function onDayHintClick(el) {
+        if (!el.classList.contains('clickable')) return;
+        if (typeof window.ttOpenMarkDialog === 'function') window.ttOpenMarkDialog(el.dataset.date);
     }
 
     function renderCalendar() {
@@ -2398,18 +2425,16 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 
                     html += '<td>';
                     html += `<div class="date-row">${currentMonth + 1}/${currentDay}</div>`;
-                    const ccList = ccDayMap[dateStr] || [];
-                    if (ccList.length) {
-                        const hintText = ccList.map(s => s.paidAbsence ? (s.name + '💰') : s.name).join('、');
-                        html += `<div class="day-hint" title="課程行事曆排課：${hintText}">${hintText}</div>`;
-                    } else {
-                        html += `<div class="day-hint empty">　</div>`;
+                    const hint = dayHintInfo(dateStr, ccDayMap);
+                    const hintSafe = escapeHintText(hint.text);
+                    const hintCls = 'day-hint' + (hint.text ? '' : ' empty') + (hint.clickable ? ' clickable' : '');
+                    const hintTitle = hint.clickable ? `TimeTree 課表：${hintSafe}（點一下可標記請假／沒上課有付錢）` : '';
+                    html += `<div class="${hintCls}" data-date="${dateStr}" title="${hintTitle}" onclick="onDayHintClick(this)">${hintSafe || '　'}</div>`;
+                    for (let j = 0; j < 6; j++) {
+                        let val = incomeData[dateStr][j] || '';
+                        const hasValueClass = String(val).trim().endsWith('*') ? ' has-value' : '';
+                        html += `<div class="input-cell${hasValueClass}"><input type="text" inputmode="decimal" data-date="${dateStr}" data-index="${j}" value="${val}" oninput="updateIncomeValue(this)" onwheel="this.blur()"></div>`;
                     }
-                    const slotCount = incomeSlotCount(dateStr);
-                    for (let j = 0; j < slotCount; j++) {
-                        html += incomeCellHtml(dateStr, j);
-                    }
-                    html += `<button type="button" class="income-add-slot" data-date="${dateStr}" onclick="addIncomeSlot('${dateStr}')" title="這天超過 6 堂，再加一格" aria-label="再加一格"${incomeDayAllFilled(dateStr) ? '' : ' hidden'}>＋</button>`;
                     html += '</td>';
                     currentDay++;
                 }
@@ -2421,19 +2446,21 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 
         html += '</tbody></table>';
         document.getElementById('calendar-area').innerHTML = html;
+        if (typeof window.ttRenderStatus === 'function') window.ttRenderStatus(document.getElementById('incomeTtStatus'));
         calculateTotals();
         // 切月份之後，上次對帳檢查的結果是另一個月份的，先收起來避免誤會
         const rcEl = document.getElementById('reconcileResult');
         if (rcEl) rcEl.style.display = 'none';
     }
 
-    /* 對帳檢查：比對本月「課程行事曆」每天實際排的堂數（不含請假），
+    /* 對帳檢查：比對本月 TimeTree「課表」每天實際排的堂數（不含網頁上標記請假的課、不含整天行程），
        跟「每日上課收入」這天已經填了幾格非空白的金額，列出不一致的日期。
        純粹唯讀比對，不會動到任何一邊的資料。 */
     function runReconcileCheck() {
         const rcEl = document.getElementById('reconcileResult');
-        if (typeof window.ccGetOccurrencesInRange !== 'function') {
-            rcEl.innerHTML = '<div class="rc-title">⚠️ 讀不到課程行事曆的資料</div><div class="rc-row">請先登入，並確認「課程行事曆」分頁至少載入過一次，再回來試一次。</div>';
+        const ttStatus = (typeof window.ttGetStatus === 'function') ? window.ttGetStatus() : null;
+        if (!ttStatus || !ttStatus.loggedIn || !ttStatus.hasData) {
+            rcEl.innerHTML = '<div class="rc-title">⚠️ 讀不到 TimeTree 課表的資料</div><div class="rc-row">請確認已經登入，而且 TimeTree 自動同步至少成功跑過一次（看上方的「TimeTree 最後同步」）。</div>';
             rcEl.style.display = 'block';
             return;
         }
@@ -2454,99 +2481,16 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         }
 
         if (mismatches.length === 0) {
-            rcEl.innerHTML = '<div class="rc-title">✓ 對帳檢查完成</div><div class="rc-row rc-ok">這個月每一天的行事曆堂數跟已填筆數都一致，沒有發現不一致的日期。</div>';
+            rcEl.innerHTML = '<div class="rc-title">✓ 對帳檢查完成</div><div class="rc-row rc-ok">這個月每一天的 TimeTree 堂數跟已填筆數都一致，沒有發現不一致的日期。</div>';
         } else {
             let rows = mismatches.map(m => {
                 const hint = m.expected > m.filled ? '可能少填了' : '填的比排課多，確認一下';
-                return `<div class="rc-row"><span>${m.label}</span><span>行事曆 ${m.expected} 堂　實際填 ${m.filled} 筆　（${hint}）</span></div>`;
+                return `<div class="rc-row"><span>${m.label}</span><span>TimeTree ${m.expected} 堂　實際填 ${m.filled} 筆　（${hint}）</span></div>`;
             }).join('');
             rcEl.innerHTML = `<div class="rc-title">🔍 對帳檢查：發現 ${mismatches.length} 天不一致</div>${rows}`;
         }
         rcEl.style.display = 'block';
     }
-
-    /* ===== 每天可變格數：預設 6 格，只有「當天格子全部填滿」時才會出現 ＋ 再多一格 =====
-       incomeExtraOpen 只記在記憶體：按 ＋ 之後、還沒填內容之前，先讓那一格留在畫面上；
-       離開那一格時如果還是空的，就會自動收回去（見 trimIncomeExtraSlots）。 */
-    const INCOME_BASE_SLOTS = 6;
-    const incomeExtraOpen = {};
-
-    function incomeLastFilledIndex(dateStr) {
-        const arr = incomeData[dateStr] || [];
-        for (let i = arr.length - 1; i >= 0; i--) {
-            if (String(arr[i] === undefined || arr[i] === null ? '' : arr[i]).trim() !== '') return i;
-        }
-        return -1;
-    }
-
-    function incomeSlotCount(dateStr) {
-        return Math.max(INCOME_BASE_SLOTS, incomeLastFilledIndex(dateStr) + 1, incomeExtraOpen[dateStr] || 0);
-    }
-
-    function incomeDayAllFilled(dateStr) {
-        const n = incomeSlotCount(dateStr);
-        const arr = incomeData[dateStr] || [];
-        for (let i = 0; i < n; i++) {
-            if (String(arr[i] === undefined || arr[i] === null ? '' : arr[i]).trim() === '') return false;
-        }
-        return true;
-    }
-
-    function incomeCellHtml(dateStr, j) {
-        const val = (incomeData[dateStr] && incomeData[dateStr][j]) || '';
-        const hasValueClass = String(val).trim().endsWith('*') ? ' has-value' : '';
-        return `<div class="input-cell${hasValueClass}"><input type="text" inputmode="decimal" data-date="${dateStr}" data-index="${j}" value="${val}" oninput="updateIncomeValue(this)" onwheel="this.blur()"></div>`;
-    }
-
-    function refreshIncomeAddButton(dateStr) {
-        const btn = document.querySelector(`.income-add-slot[data-date="${dateStr}"]`);
-        if (btn) btn.hidden = !incomeDayAllFilled(dateStr);
-    }
-
-    function addIncomeSlot(dateStr) {
-        if (!incomeData[dateStr]) incomeData[dateStr] = ['', '', '', '', '', ''];
-        const n = incomeSlotCount(dateStr);
-        while (incomeData[dateStr].length < n + 1) incomeData[dateStr].push('');
-        incomeExtraOpen[dateStr] = n + 1;
-        const btn = document.querySelector(`.income-add-slot[data-date="${dateStr}"]`);
-        if (!btn) return;
-        btn.insertAdjacentHTML('beforebegin', incomeCellHtml(dateStr, n));
-        btn.hidden = true;
-        const input = findIncomeInput(dateStr, n);
-        if (input) input.focus();
-    }
-
-    /* 離開某一格時：把「第 6 格以後、而且尾端是空白」的格子收回去（資料與畫面都一起收），
-       只會收尾端的空格，中間空著的格子不動，避免後面的堂序被往前擠。 */
-    function trimIncomeExtraSlots(dateStr) {
-        const arr = incomeData[dateStr];
-        if (!arr) return;
-        const keep = Math.max(INCOME_BASE_SLOTS, incomeLastFilledIndex(dateStr) + 1);
-        // 以「畫面上實際有幾格」為準（使用者剛清空的那格，資料已經是空的，但畫面上還在）
-        const domCount = document.querySelectorAll(`#calendar-area .input-cell input[data-date="${dateStr}"]`).length;
-        delete incomeExtraOpen[dateStr];
-        let changed = false;
-        if (arr.length > keep) { arr.length = keep; changed = true; }
-        for (let j = domCount - 1; j >= keep; j--) {
-            const input = findIncomeInput(dateStr, j);
-            if (input && input.closest('.input-cell')) input.closest('.input-cell').remove();
-        }
-        if (domCount > keep || changed) refreshIncomeAddButton(dateStr);
-        if (changed) saveIncomeData();
-    }
-
-    document.addEventListener('focusout', function (e) {
-        const t = e.target;
-        if (!t || !t.matches || !t.matches('#calendar-area .input-cell input')) return;
-        const date = t.getAttribute('data-date');
-        if (!date) return;
-        // 等焦點真的落到別處再收（Enter 往下移動時，目標格已經取得焦點）
-        setTimeout(function () {
-            const active = document.activeElement;
-            if (active && active.matches && active.matches('#calendar-area .input-cell input[data-date="' + date + '"]')) return;
-            trimIncomeExtraSlots(date);
-        }, 0);
-    });
 
     function updateIncomeValue(inputElem) {
         const date = inputElem.getAttribute('data-date');
@@ -2558,7 +2502,6 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
             if (inputElem.value.trim().endsWith('*')) cell.classList.add('has-value');
             else cell.classList.remove('has-value');
         }
-        refreshIncomeAddButton(date);
         saveIncomeData();
     }
 
@@ -2621,11 +2564,10 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
                     if (!dateStr) return;
 
                     if (!incomeData[dateStr]) incomeData[dateStr] = ['', '', '', '', '', ''];
-                    let slot = incomeData[dateStr].findIndex(v => v === '' || v === null || v === undefined);
+                    const slot = incomeData[dateStr].findIndex(v => v === '' || v === null || v === undefined);
                     if (slot === -1) {
-                        // 當天已滿：直接往後多加一格（超過 6 堂的日子），不再略過
-                        incomeData[dateStr].push('');
-                        slot = incomeData[dateStr].length - 1;
+                        skippedCount++;
+                        return;
                     }
                     incomeData[dateStr][slot] = String(amtVal).trim();
                     importCount++;
@@ -2634,7 +2576,7 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
                 saveIncomeData();
                 renderCalendar();
                 let msg = `已匯入 ${importCount} 筆每日收入紀錄。`;
-                if (skippedCount > 0) msg += `\n有 ${skippedCount} 筆被略過，請手動確認並補上。`;
+                if (skippedCount > 0) msg += `\n有 ${skippedCount} 筆因當天已滿 6 筆而略過，請手動確認並補上。`;
                 alert(msg);
             } catch (err) {
                 console.error(err);
@@ -2664,28 +2606,18 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         const idx = parseInt(input.getAttribute('data-index'), 10);
         let target = null;
 
-        const lastIdxOf = d => document.querySelectorAll(`.input-cell input[data-date="${d}"]`).length - 1;
-        // 左右移到隔壁天：如果隔壁天格數比較少，就停在它的最後一格
-        const sideTarget = d => {
-            const n = lastIdxOf(d);
-            return n < 0 ? null : findIncomeInput(d, Math.min(idx, n));
-        };
         if (e.key === 'Enter' || e.key === 'ArrowDown') {
             e.preventDefault();
-            target = (idx < lastIdxOf(date)) ? findIncomeInput(date, idx + 1) : findIncomeInput(shiftDateStr(date, 1), 0);
+            target = (idx < 5) ? findIncomeInput(date, idx + 1) : findIncomeInput(shiftDateStr(date, 1), 0);
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
-            if (idx > 0) target = findIncomeInput(date, idx - 1);
-            else {
-                const prev = shiftDateStr(date, -1);
-                target = findIncomeInput(prev, lastIdxOf(prev));
-            }
+            target = (idx > 0) ? findIncomeInput(date, idx - 1) : findIncomeInput(shiftDateStr(date, -1), 5);
         } else if (e.key === 'ArrowLeft') {
             e.preventDefault();
-            target = sideTarget(shiftDateStr(date, -1));
+            target = findIncomeInput(shiftDateStr(date, -1), idx);
         } else if (e.key === 'ArrowRight') {
             e.preventDefault();
-            target = sideTarget(shiftDateStr(date, 1));
+            target = findIncomeInput(shiftDateStr(date, 1), idx);
         }
 
         if (target) {
@@ -3168,25 +3100,19 @@ ${recentTrend.join('\n')}
         bodyRows.forEach(tr => {
             const cells = tr.querySelectorAll('td');
             const dateRow = [];
-            // 這一週裡「格數最多的那天」決定要輸出幾列（至少 6 列），超過 6 堂的日子才不會在匯出時被截掉
-            let rowsNeeded = 6;
-            cells.forEach((td, idx) => {
-                if (idx === 7 || td.classList.contains('empty-day')) return;
-                rowsNeeded = Math.max(rowsNeeded, td.querySelectorAll('.input-cell input').length);
-            });
-            const incomeRows = Array.from({ length: rowsNeeded }, () => []);
+            const incomeRows = [[], [], [], [], [], []];
             let weeklyTotal = '';
             cells.forEach((td, idx) => {
                 if (idx === 7) { weeklyTotal = td.textContent.trim(); return; }
                 if (td.classList.contains('empty-day')) {
                     dateRow.push('');
-                    for (let s = 0; s < rowsNeeded; s++) incomeRows[s].push('');
+                    for (let s = 0; s < 6; s++) incomeRows[s].push('');
                     return;
                 }
                 const dateDiv = td.querySelector('.date-row');
                 dateRow.push(dateDiv ? dateDiv.textContent.trim() : '');
                 const inputs = td.querySelectorAll('.input-cell input');
-                for (let s = 0; s < rowsNeeded; s++) incomeRows[s].push(inputs[s] ? inputs[s].value : '');
+                for (let s = 0; s < 6; s++) incomeRows[s].push(inputs[s] ? inputs[s].value : '');
             });
             aoa.push(dateRow.concat(['']));
             incomeRows.forEach((r, i) => aoa.push(r.concat([i === 0 ? weeklyTotal : ''])));
@@ -3228,27 +3154,19 @@ ${recentTrend.join('\n')}
 
         while (currentDay <= lastDay.getDate()) {
             const dateRow = [];
-            // 先掃這一週，找出「格數最多的那天」決定輸出幾列（至少 6 列），超過 6 堂的日子才不會被截掉
-            let rowsNeeded = 6;
-            for (let i = 1, d = currentDay; i <= 7 && d <= lastDay.getDate(); i++) {
-                if (isFirstWeek && i < startDayOfWeek) continue;
-                const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                rowsNeeded = Math.max(rowsNeeded, (incomeData[ds] || []).length);
-                d++;
-            }
-            const incomeRows = Array.from({ length: rowsNeeded }, () => []);
+            const incomeRows = [[], [], [], [], [], []];
             let weekTotal = 0;
             let weekHasValue = false;
 
             for (let i = 1; i <= 7; i++) {
                 if ((isFirstWeek && i < startDayOfWeek) || currentDay > lastDay.getDate()) {
                     dateRow.push('');
-                    for (let s = 0; s < rowsNeeded; s++) incomeRows[s].push('');
+                    for (let s = 0; s < 6; s++) incomeRows[s].push('');
                 } else {
                     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
                     dateRow.push(`${month + 1}/${currentDay}`);
                     const values = incomeData[dateStr] || ['', '', '', '', '', ''];
-                    for (let s = 0; s < rowsNeeded; s++) {
+                    for (let s = 0; s < 6; s++) {
                         const raw = values[s] || '';
                         incomeRows[s].push(raw);
                         const num = parseFloat(raw);
@@ -3484,7 +3402,9 @@ ${recentTrend.join('\n')}
         saveData();
     }
 
-    let summaryDebounceTimer = null;
+    // 用 var 而不是 let：全新瀏覽器（localStorage 沒資料）時，上面的 saveData() 會比這行更早執行，
+    // 用 let 會直接拋錯，讓整段程式（包含登入後的雲端同步）停擺。
+    var summaryDebounceTimer = null;
     /* renderSummary() 要重新分組整年度、重建整張統計表格的 innerHTML，成本不低；
        saveData() 卻是每打一個字（oninput）就會呼叫一次，等於「每打一個字就重建一次年度統計表」。
        資料筆數一多，這個同步重繪會塞住主執行緒，手機上就會出現畫面卡住、
@@ -3673,70 +3593,6 @@ ${recentTrend.join('\n')}
         if (totalConvertedElem) totalConvertedElem.textContent = Math.round(sumConvTwd);
     }
 
-    /* ===== 實際收入紀錄表：篩選功能（學生／關鍵字 + 時間區間，預設為全部） =====
-       不重新過濾 records 陣列本身（每個 input 的 onclick/onchange 都是用陣列索引直接
-       對應 tbody 底下第幾個 <tr>，重新過濾陣列會讓索引跟畫面對不上），
-       而是整表照常渲染後，用「隱藏不符合條件的列」＋「另外加總符合條件的列」來實作，
-       確保所有既有的編輯／刪除功能完全不受影響。 */
-    function getRecordFilterValues() {
-        const studentEl = document.getElementById('recordFilterStudent');
-        const fromEl = document.getElementById('recordFilterFrom');
-        const toEl = document.getElementById('recordFilterTo');
-        return {
-            student: studentEl ? studentEl.value.trim().toLowerCase() : '',
-            from: fromEl ? fromEl.value : '',
-            to: toEl ? toEl.value : ''
-        };
-    }
-
-    function recordMatchesFilter(row, f) {
-        if (f.student && !String(row.student || '').toLowerCase().includes(f.student)) return false;
-        if (f.from && (!row.date || row.date < f.from)) return false;
-        if (f.to && (!row.date || row.date > f.to)) return false;
-        return true;
-    }
-
-    function applyRecordFilter() {
-        const tbody = document.getElementById('record-tbody');
-        const summaryEl = document.getElementById('recordFilterSummary');
-        if (!tbody) return;
-        const f = getRecordFilterValues();
-        const hasFilter = !!(f.student || f.from || f.to);
-
-        let count = 0, sumConvTwd = 0, sumClasses = 0;
-        records.forEach((row, index) => {
-            const tr = tbody.children[index];
-            const match = recordMatchesFilter(row, f);
-            if (tr) tr.style.display = match ? '' : 'none';
-            if (match) {
-                count++;
-                const conv = parseFloat(row.convTwd);
-                if (!isNaN(conv)) sumConvTwd += conv;
-                const cls = parseFloat(row.classes);
-                if (!isNaN(cls)) sumClasses += cls;
-            }
-        });
-
-        if (summaryEl) {
-            if (!hasFilter) {
-                summaryEl.textContent = `共 ${count} 筆，換算台幣合計 NT$${Math.round(sumConvTwd).toLocaleString()}`;
-            } else {
-                const avgText = sumClasses > 0 ? `，平均每堂 NT$${Math.round(sumConvTwd / sumClasses).toLocaleString()}` : '';
-                summaryEl.textContent = `篩選結果：${count} 筆，換算台幣合計 NT$${Math.round(sumConvTwd).toLocaleString()}${avgText}`;
-            }
-        }
-    }
-
-    function clearRecordFilter() {
-        const studentEl = document.getElementById('recordFilterStudent');
-        const fromEl = document.getElementById('recordFilterFrom');
-        const toEl = document.getElementById('recordFilterTo');
-        if (studentEl) studentEl.value = '';
-        if (fromEl) fromEl.value = '';
-        if (toEl) toEl.value = '';
-        applyRecordFilter();
-    }
-
     /* 數字欄位（匯入金額／實收金額／台幣／換算台幣／購買堂數）每打一個字都會觸發，
        只局部更新該列，且用 preventScroll 保住游標與捲動位置，避免整表重繪造成畫面跳到最上方 */
     function updateFieldLive(index, field, value) {
@@ -3771,7 +3627,6 @@ ${recentTrend.join('\n')}
         }
 
         refreshTotalConvertedTwd();
-        applyRecordFilter();
     }
 
     /* 依收款日排序（由舊到新）；沒有日期的紀錄排到最後，維持原本相對順序 */
@@ -3801,7 +3656,6 @@ ${recentTrend.join('\n')}
         });
 
         refreshTotalConvertedTwd();
-        applyRecordFilter();
     }
 
     function addRow() {
@@ -4253,6 +4107,9 @@ ${monthLines.join('\n') || '（尚無資料）'}
         if (typeof window.updateCourseCalGateUI === 'function') {
             window.updateCourseCalGateUI(user);
         }
+        // TimeTree「課表」（唯讀）與網頁標記：每日上課收入、課程行事曆兩個分頁都會用到
+        if (user) { if (typeof window.ttOnLogin === 'function') window.ttOnLogin(user); }
+        else { if (typeof window.ttOnLogout === 'function') window.ttOnLogout(); }
         // 「每日上課收入」（學生收費表＋日曆紀錄）與「實際收入紀錄」，改成跟課表一樣真的存進 Firestore、多裝置同步
         if (user) {
             initDailyIncomeCloudSync();
@@ -4347,7 +4204,7 @@ ${monthLines.join('\n') || '（尚無資料）'}
        「實際收入紀錄」（actualIncomeRecords）雲端同步，邏輯同上
     ============================================================ */
     let actualUnsub = null;
-    let actualSaveTimer = null;
+    var actualSaveTimer = null; // var：全新瀏覽器時會比這行更早被用到（同 summaryDebounceTimer 的原因）
     let actualMigrationDone = false;
 
     function actualDocRef(){
@@ -6538,6 +6395,8 @@ let viewDate = new Date();
 let currentDayISO = null;
 let filterStudentIds = null;     // null = 不篩選（全顯示）；否則是 Set
 let showLeaveCourses = false;    // 請假的課預設隱藏，勾選篩選面板裡的選項才會顯示出來（畫面顯示用，不影響資料本身）
+// 資料來源：'tt' = TimeTree 課表（唯讀，只能標記）；'web' = 網頁上自己排的行事曆（原本的功能，暫時保留）
+let ccSource = (function(){ try{ return localStorage.getItem('ccSource') === 'web' ? 'web' : 'tt'; }catch(e){ return 'tt'; } })();
 
 let sheetMode = "create";        // create | series | occurrence | block-create | block-edit
 let editingEventId = null;
@@ -6694,6 +6553,65 @@ function isOccVisible(o){
   return true;
 }
 
+/* ================= TimeTree 來源（唯讀） ================= */
+function isTT(){ return ccSource === 'tt'; }
+/* 用 TimeTree 課的標題對應到「學生」名單（拿學生的顏色）；對不到就用 TimeTree 的顏色或灰色 */
+function matchStudentByTitle(title){
+  const t = String(title||'').trim().toLowerCase();
+  if(!t) return null;
+  const exact = students.find(s=> String(s.name||'').trim().toLowerCase() === t);
+  if(exact) return exact;
+  return students.find(s=>{
+    const n = String(s.name||'').trim().toLowerCase();
+    return n && (t.startsWith(n+' ') || t.startsWith(n+'(') || t.startsWith(n+'（'));
+  }) || null;
+}
+function ttOccurrences(rangeStartISO, rangeEndISO){
+  if(typeof window.ttGetOccurrencesInRange !== 'function') return [];
+  return window.ttGetOccurrencesInRange(rangeStartISO, rangeEndISO).filter(o=> !o.allDay).map(o=>{
+    const st = matchStudentByTitle(o.title);
+    return {
+      eventId: 'tt:'+o.key, ttKey: o.key, studentId: st ? st.id : ('tt:'+(o.title||'')),
+      date: o.date, originalDate: o.date,
+      startTime: o.startTime || '00:00', endTime: o.endTime || o.startTime || '00:00',
+      moved: false, paidAbsence: !!o.paidAbsence, leave: !!o.leave,
+      notes: o.note || '', title: o.title || '', ttColor: o.color || '',
+    };
+  });
+}
+function ttAllDayOn(iso){
+  if(!isTT() || typeof window.ttGetOccurrencesInRange !== 'function') return [];
+  return window.ttGetOccurrencesInRange(iso, iso).filter(o=> o.allDay);
+}
+function getOccurrences(rangeStartISO, rangeEndISO){
+  return isTT() ? ttOccurrences(rangeStartISO, rangeEndISO) : expandAll(rangeStartISO, rangeEndISO);
+}
+function occName(o){ const st = studentById(o.studentId); return st ? st.name : (o.title || '?'); }
+function occColor(o){ const st = studentById(o.studentId); return st ? st.color : (o.ttColor || '#888'); }
+
+/* 切換來源時，把只適用網頁行事曆的按鈕藏起來（TimeTree 的課要回 TimeTree 改） */
+function applySourceUI(){
+  const tt = isTT();
+  const btn = document.getElementById('btnSource');
+  if(btn) btn.textContent = tt ? '🔁 來源：TimeTree' : '🔁 來源：網頁';
+  ['fabAdd','btnAddInDay','btnGenFromSchedule','ccIcsBox'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.style.display = tt ? 'none' : '';
+  });
+  renderTtStatus();
+}
+function renderTtStatus(){
+  const el = document.getElementById('ccTtStatus');
+  if(!el) return;
+  if(!isTT()){ el.className = 'tt-status'; el.textContent = '目前顯示：網頁上自己排的行事曆'; return; }
+  if(typeof window.ttRenderStatus === 'function') window.ttRenderStatus(el);
+}
+// TimeTree 資料或標記有變動 → 重畫（TimeTree 的程式比這裡晚載入，先排進等候清單）
+(window.ttPendingSubscribers = window.ttPendingSubscribers || []).push(function(){
+  renderTtStatus();
+  if(isTT()) renderCurrentView();
+});
+
 /* ================= 月檢視渲染 ================= */
 function renderMonth(){
   const y = viewDate.getFullYear(), m = viewDate.getMonth();
@@ -6706,7 +6624,7 @@ function renderMonth(){
   const gridEndDate = new Date(gridStart); gridEndDate.setDate(gridStart.getDate()+totalCells-1);
 
   const rangeStart = toISODate(gridStart), rangeEnd = toISODate(gridEndDate);
-  const occ = expandAll(rangeStart, rangeEnd);
+  const occ = getOccurrences(rangeStart, rangeEnd);
   const rangeBlocks = blocksOverlapping(rangeStart, rangeEnd);
 
   const grid = document.getElementById("monthGrid");
@@ -6731,6 +6649,13 @@ function renderMonth(){
       banner.addEventListener("click",(e)=>{ e.stopPropagation(); openBlockEdit(b.id); });
       cell.appendChild(banner);
     });
+    ttAllDayOn(iso).forEach(a=>{
+      const banner = document.createElement("div");
+      banner.className = "cc-allday-banner";
+      banner.textContent = "📌 "+(a.title||"");
+      banner.title = "TimeTree 整天行程：" + (a.title||"");
+      cell.appendChild(banner);
+    });
 
     const dayOcc = occ.filter(o=>o.date===iso && isOccVisible(o))
       .sort((a,b)=>minutesOf(a.startTime)-minutesOf(b.startTime));
@@ -6741,20 +6666,21 @@ function renderMonth(){
       const hasBlock = blocksOnDate(o.date).length>0;
       const chip = document.createElement("div");
       chip.className = "cc-chip"+(o.paidAbsence?" paid-absence":"")+(o.leave?" leave":"");
-      chip.style.background = st ? st.color : "#888";
+      chip.style.background = occColor(o);
       chip.dataset.eventId = o.eventId;
       chip.dataset.date = o.date;
       chip.dataset.originalDate = o.originalDate;
+      if(o.ttKey){ chip.dataset.ttKey = o.ttKey; chip.title = `${o.startTime}–${o.endTime} ${o.title}（點一下可標記）`; }
 
       const nameSpan = document.createElement("span");
-      nameSpan.textContent = st?st.name:"?";
+      nameSpan.textContent = occName(o);
       chip.appendChild(nameSpan);
       if(o.paidAbsence){ const p=document.createElement("span"); p.textContent="💰"; chip.appendChild(p); }
       if(o.leave){ const lv=document.createElement("span"); lv.textContent="💤"; chip.appendChild(lv); }
       if(conflicts.length){ const w=document.createElement("span"); w.className="warn"; w.textContent="⚠️"; chip.appendChild(w); }
       if(hasBlock){ const t=document.createElement("span"); t.className="trip"; t.textContent="✈️"; chip.appendChild(t); }
 
-      makeChipDraggable(chip, o.eventId, o.originalDate);
+      if(!o.ttKey) makeChipDraggable(chip, o.eventId, o.originalDate); // TimeTree 的課是唯讀，不能拖曳
       cell.appendChild(chip);
     });
     if(dayOcc.length>3){
@@ -6764,13 +6690,18 @@ function renderMonth(){
     }
 
     cell.addEventListener("click", (e)=>{
-      if(e.target.closest(".cc-chip")) return; // 單擊色塊不動作，雙擊才編輯（見下方 dblclick）
+      const chip = e.target.closest(".cc-chip");
+      if(chip){
+        // TimeTree 的課：單擊就開標記視窗；網頁行事曆的課：單擊不動作，雙擊才編輯（見下方 dblclick）
+        if(chip.dataset.ttKey && typeof window.ttOpenMarkDialog === 'function') window.ttOpenMarkDialog(chip.dataset.date, chip.dataset.ttKey);
+        return;
+      }
       if(e.target.closest(".cc-block-banner")) return;
       openDayView(iso);
     });
     cell.addEventListener("dblclick", (e)=>{
       const chip = e.target.closest(".cc-chip");
-      if(chip) openOccurrenceEdit(chip.dataset.eventId, chip.dataset.originalDate);
+      if(chip && !chip.dataset.ttKey) openOccurrenceEdit(chip.dataset.eventId, chip.dataset.originalDate);
     });
     cell.addEventListener("dragover", (e)=> e.preventDefault());
 
@@ -6937,14 +6868,21 @@ function renderDayView(){
     stripsWrap.appendChild(strip);
   });
 
-  const occ = expandAll(currentDayISO, currentDayISO);
+  ttAllDayOn(currentDayISO).forEach(a=>{
+    const strip = document.createElement("div");
+    strip.className = "cc-block-strip";
+    strip.textContent = "📌 " + (a.title||"") + "（TimeTree 整天行程）";
+    stripsWrap.appendChild(strip);
+  });
+
+  const occ = getOccurrences(currentDayISO, currentDayISO);
   const dayOcc = occ.filter(o=>o.date===currentDayISO && isOccVisible(o))
     .sort((a,b)=>minutesOf(a.startTime)-minutesOf(b.startTime));
 
   const list = document.getElementById("agendaList");
   list.innerHTML = "";
 
-  if(dayOcc.length===0 && blocksOnDate(currentDayISO).length===0){
+  if(dayOcc.length===0 && blocksOnDate(currentDayISO).length===0 && ttAllDayOn(currentDayISO).length===0){
     const empty = document.createElement("div");
     empty.className = "cc-empty-day"; empty.textContent = "這天沒有安排課程";
     list.appendChild(empty);
@@ -6960,12 +6898,12 @@ function renderDayView(){
 
     const card = document.createElement("div");
     card.className = "cc-agenda-card"+(o.paidAbsence?" paid-absence":"")+(o.leave?" leave":"");
-    card.style.background = st?st.color:"#888";
+    card.style.background = occColor(o);
     card.style.height = h+"px";
 
     const t = document.createElement("div"); t.className="t"; t.textContent = `${o.startTime}–${o.endTime}`;
     const n = document.createElement("div"); n.className="n";
-    const nameSpan = document.createElement("span"); nameSpan.className="name-text"; nameSpan.textContent = st?st.name:"?";
+    const nameSpan = document.createElement("span"); nameSpan.className="name-text"; nameSpan.textContent = occName(o);
     n.appendChild(nameSpan);
     if(o.paidAbsence){ const p=document.createElement("span"); p.textContent="💰"; n.appendChild(p); }
     if(o.leave){ const lv=document.createElement("span"); lv.textContent="💤"; n.appendChild(lv); }
@@ -6973,7 +6911,10 @@ function renderDayView(){
     if(hasBlock){ const tr=document.createElement("span"); tr.textContent="✈️"; n.appendChild(tr); }
     card.appendChild(t); card.appendChild(n);
 
-    card.addEventListener("click", ()=> openOccurrenceEdit(o.eventId, o.originalDate));
+    card.addEventListener("click", ()=>{
+      if(o.ttKey){ if(typeof window.ttOpenMarkDialog === 'function') window.ttOpenMarkDialog(o.date, o.ttKey); }
+      else openOccurrenceEdit(o.eventId, o.originalDate);
+    });
     list.appendChild(card);
   });
 }
@@ -6981,7 +6922,7 @@ function renderDayView(){
 /* ================= 衝堂確認彈窗 ================= */
 function showConflictConfirm(conflicts, subjectLabel, onProceed, onCancelExtra){
   const names = conflicts.map(c=>{
-    const s=studentById(c.studentId); return `${s?s.name:"?"} ${c.startTime}-${c.endTime}`;
+    return `${occName(c)} ${c.startTime}-${c.endTime}`;
   }).join("、");
   document.getElementById("confirmDetail").textContent = `這堂 ${subjectLabel} 的課，跟這些課重疊：${names}`;
   document.getElementById("confirmOverlay").classList.add("active");
@@ -7609,6 +7550,13 @@ document.querySelectorAll("#kindToggle button").forEach(b=>{
   };
 
   document.getElementById("ccRefreshBtn").onclick = ()=>{ if(window.ccReload) window.ccReload(); };
+  document.getElementById("btnSource").onclick = ()=>{
+    ccSource = isTT() ? 'web' : 'tt';
+    try{ localStorage.setItem('ccSource', ccSource); }catch(e){}
+    applySourceUI();
+    renderCurrentView();
+  };
+  applySourceUI();
   document.getElementById("ccCopyIcsBtn").onclick = ()=>{
     const el = document.getElementById("ccIcsUrl");
     const text = el ? el.textContent : "";
@@ -7657,6 +7605,252 @@ window.ccGetOccurrencesInRange = function(rangeStartISO, rangeEndISO){
   }
 };
 
+})();
+</script>
+
+<style>
+/* ===== TimeTree 課表標記視窗（全站共用，掛在 body 底下）===== */
+.tt-overlay{position:fixed;inset:0;background:rgba(30,40,30,.45);display:none;align-items:center;justify-content:center;z-index:3000;padding:16px;}
+.tt-overlay.active{display:flex;}
+.tt-dialog{background:var(--forest-card);color:var(--forest-deep);border:1px solid var(--forest-line);border-radius:12px;width:100%;max-width:420px;max-height:85vh;overflow:auto;padding:16px 18px;box-shadow:0 10px 30px rgba(0,0,0,.25);}
+.tt-dialog h3{margin:0 0 4px;font-size:16px;}
+.tt-dialog .tt-sub{font-size:12px;color:var(--forest-bark);margin-bottom:12px;line-height:1.5;}
+.tt-row{border:1px solid var(--forest-line);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:var(--forest-cream);}
+.tt-row .tt-name{font-weight:700;font-size:14px;}
+.tt-row .tt-time{font-size:12px;color:var(--forest-bark);margin-left:6px;}
+.tt-row.leave .tt-name{text-decoration:line-through;opacity:.7;}
+.tt-row .tt-checks{display:flex;gap:16px;margin-top:6px;font-size:13px;flex-wrap:wrap;}
+.tt-row .tt-checks label{display:flex;align-items:center;gap:4px;cursor:pointer;}
+.tt-dialog .tt-actions{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px;}
+.tt-dialog .tt-saved{font-size:12px;color:var(--forest-mid);}
+.tt-dialog button.tt-close{background:var(--forest-mid);color:#fff;border:none;border-radius:8px;padding:7px 18px;font-size:13px;cursor:pointer;}
+.tt-empty{font-size:13px;color:var(--forest-bark);padding:10px 0;}
+.tt-status{font-size:11.5px;color:var(--forest-bark);}
+.tt-status.warn{color:var(--forest-berry);font-weight:700;}
+.day-hint.clickable{cursor:pointer;}
+.day-hint.clickable:hover{text-decoration:underline;}
+</style>
+
+<script>
+/* =====================================================================
+   TimeTree「課表」（唯讀）＋ 網頁上的「請假／沒上課有付錢」標記
+   - 課程資料：users/{uid}/ttSync/state （GitHub Actions 每 3 小時從 TimeTree 匯入，整份覆蓋）
+   - 標記資料：users/{uid}/ttMarks/{docId} （只有網頁會寫；同步程式完全不碰，所以不會被蓋掉）
+   - 「每日上課收入」與「課程行事曆」兩個分頁都讀這裡，標記在哪邊做都會同步到另一邊
+===================================================================== */
+(function(){
+"use strict";
+
+const STALE_HOURS = 12;   // 超過幾小時沒同步成功就顯示紅字警告
+let uid = null;
+let state = null;          // ttSync/state 的內容
+let stateLoaded = false;
+let stateError = null;
+let marks = {};            // key -> {leave, paidAbsence}
+let unsubState = null, unsubMarks = null;
+const listeners = [];
+
+function notify(){
+  listeners.forEach(fn=>{ try{ fn(); }catch(e){ console.error('TimeTree：更新畫面失敗', e); } });
+}
+function markDocId(key){ return String(key).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 700); }
+
+window.ttOnLogin = function(user){
+  const newUid = user && user.uid;
+  if(!newUid) return;
+  if(newUid === uid && unsubState) return;
+  window.ttOnLogout();
+  uid = newUid;
+  try{
+    unsubState = window.firebaseOnSnapshot(
+      window.firebaseDoc(window.firebaseDb, 'users', uid, 'ttSync', 'state'),
+      snap=>{ state = snap.exists() ? snap.data() : null; stateLoaded = true; stateError = null; notify(); },
+      err=>{ console.error('TimeTree：讀取課表失敗', err); stateLoaded = true; stateError = err; notify(); }
+    );
+    unsubMarks = window.firebaseOnSnapshot(
+      window.firebaseCollection(window.firebaseDb, 'users', uid, 'ttMarks'),
+      qs=>{
+        const m = {};
+        qs.forEach(d=>{ const v = d.data(); if(v && v.key) m[v.key] = {leave: !!v.leave, paidAbsence: !!v.paidAbsence}; });
+        marks = m; notify();
+      },
+      err=>{ console.error('TimeTree：讀取標記失敗', err); }
+    );
+  }catch(e){
+    console.error('TimeTree：連線失敗', e);
+    stateLoaded = true; stateError = e; notify();
+  }
+};
+
+window.ttOnLogout = function(){
+  if(unsubState) unsubState();
+  if(unsubMarks) unsubMarks();
+  unsubState = unsubMarks = null;
+  uid = null; state = null; stateLoaded = false; stateError = null; marks = {};
+  notify();
+};
+
+window.ttSubscribe = function(fn){ listeners.push(fn); };
+// 比這支程式更早載入的分頁（例如每日上課收入）會先把要通知的函式放在等候清單裡
+(window.ttPendingSubscribers || []).forEach(fn=> listeners.push(fn));
+window.ttPendingSubscribers = { push: fn=> listeners.push(fn) };
+
+window.ttGetStatus = function(){
+  return {
+    loggedIn: !!uid, loaded: stateLoaded, hasData: !!state, error: stateError,
+    lastSyncMs: state ? state.lastSyncMs : null, count: state ? (state.count || 0) : 0,
+    rangeStart: state ? state.rangeStart : null, rangeEnd: state ? state.rangeEnd : null,
+  };
+};
+
+/* 回傳期間內的 TimeTree 課（已套用網頁上的標記）。allDay＝整天行程（不是課），呼叫端自行決定要不要用 */
+window.ttGetOccurrencesInRange = function(rangeStartISO, rangeEndISO){
+  if(!state || !Array.isArray(state.events)) return [];
+  return state.events
+    .filter(ev=> ev.date >= rangeStartISO && ev.date <= rangeEndISO)
+    .map(ev=>{
+      const mk = marks[ev.key] || {};
+      return Object.assign({}, ev, { leave: !!mk.leave, paidAbsence: !!mk.paidAbsence && !mk.leave });
+    });
+};
+
+/* 寫入標記：兩個都沒勾就刪掉那筆標記 */
+window.ttSetMark = async function(ev, leave, paidAbsence){
+  if(!uid) return;
+  const prev = marks[ev.key];
+  if(leave || paidAbsence) marks[ev.key] = {leave: !!leave, paidAbsence: !!paidAbsence && !leave};
+  else delete marks[ev.key];
+  notify(); // 先更新畫面，雲端寫入完成後 onSnapshot 會再確認一次
+  const ref = window.firebaseDoc(window.firebaseDb, 'users', uid, 'ttMarks', markDocId(ev.key));
+  try{
+    if(leave || paidAbsence){
+      await window.firebaseSetDoc(ref, {
+        key: ev.key, leave: !!leave, paidAbsence: !!paidAbsence && !leave,
+        date: ev.date, title: ev.title || '', updatedAt: Date.now(),
+      });
+    }else{
+      await window.firebaseDeleteDoc(ref);
+    }
+    return true;
+  }catch(e){
+    console.error('TimeTree：儲存標記失敗', e);
+    if(prev) marks[ev.key] = prev; else delete marks[ev.key];
+    notify();
+    alert('標記儲存失敗，請檢查網路連線後再試一次。');
+    return false;
+  }
+};
+
+/* 「最後同步：X 小時前」狀態文字 */
+function fmtAgo(ms){
+  const diff = Date.now() - ms;
+  const min = Math.max(0, Math.round(diff / 60000));
+  if(min < 60) return min + ' 分鐘前';
+  const h = Math.round(min / 60);
+  if(h < 48) return h + ' 小時前';
+  return Math.round(h / 24) + ' 天前';
+}
+window.ttRenderStatus = function(el){
+  if(!el) return;
+  const s = window.ttGetStatus();
+  el.className = 'tt-status';
+  if(!s.loggedIn){ el.textContent = ''; return; }
+  if(!s.loaded){ el.textContent = 'TimeTree：讀取中…'; return; }
+  if(s.error){ el.className = 'tt-status warn'; el.textContent = '⚠️ TimeTree 課表讀取失敗（可能是 Firestore 權限規則還沒加）'; return; }
+  if(!s.hasData){ el.className = 'tt-status warn'; el.textContent = '⚠️ 還沒有 TimeTree 課表資料（自動同步還沒成功跑過）'; return; }
+  const stale = s.lastSyncMs && (Date.now() - s.lastSyncMs) > STALE_HOURS * 3600000;
+  el.textContent = (stale ? '⚠️ ' : '') + 'TimeTree 最後同步：' + (s.lastSyncMs ? fmtAgo(s.lastSyncMs) : '未知') + '（' + s.count + ' 堂）'
+    + (stale ? '　超過 ' + STALE_HOURS + ' 小時沒同步成功，請到 GitHub 查看執行紀錄' : '');
+  if(stale) el.className = 'tt-status warn';
+};
+
+/* ---------------- 標記視窗 ---------------- */
+let dialogDate = null, dialogOnlyKey = null;
+
+function ensureDialog(){
+  let ov = document.getElementById('ttMarkOverlay');
+  if(ov) return ov;
+  ov = document.createElement('div');
+  ov.id = 'ttMarkOverlay'; ov.className = 'tt-overlay';
+  ov.innerHTML = '<div class="tt-dialog" role="dialog" aria-modal="true">'
+    + '<h3 id="ttMarkTitle"></h3>'
+    + '<div class="tt-sub">課程來自 TimeTree「課表」（唯讀，要改時間請到 TimeTree 改）。這裡的標記只存在網頁上，TimeTree 看不到。</div>'
+    + '<div id="ttMarkList"></div>'
+    + '<div class="tt-actions"><span class="tt-saved" id="ttMarkSaved"></span><button type="button" class="tt-close" id="ttMarkClose">完成</button></div>'
+    + '</div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click', e=>{ if(e.target === ov) closeDialog(); });
+  ov.querySelector('#ttMarkClose').addEventListener('click', closeDialog);
+  document.addEventListener('keydown', e=>{ if(e.key === 'Escape' && ov.classList.contains('active')) closeDialog(); });
+  return ov;
+}
+function closeDialog(){
+  const ov = document.getElementById('ttMarkOverlay');
+  if(ov) ov.classList.remove('active');
+  dialogDate = null; dialogOnlyKey = null;
+}
+
+function renderDialog(){
+  const ov = document.getElementById('ttMarkOverlay');
+  if(!ov || !ov.classList.contains('active') || !dialogDate) return;
+  const d = new Date(dialogDate + 'T00:00:00');
+  const wd = ['日','一','二','三','四','五','六'][d.getDay()];
+  ov.querySelector('#ttMarkTitle').textContent = '標記課程　' + (d.getMonth()+1) + '/' + d.getDate() + '（' + wd + '）';
+  const list = ov.querySelector('#ttMarkList');
+  list.innerHTML = '';
+  let items = window.ttGetOccurrencesInRange(dialogDate, dialogDate).filter(o=> !o.allDay);
+  if(dialogOnlyKey) items = items.filter(o=> o.key === dialogOnlyKey);
+  items.sort((a,b)=> (a.startTime||'').localeCompare(b.startTime||''));
+  if(!items.length){
+    const empty = document.createElement('div');
+    empty.className = 'tt-empty'; empty.textContent = '這天在 TimeTree「課表」裡沒有課。';
+    list.appendChild(empty);
+    return;
+  }
+  items.forEach(o=>{
+    const row = document.createElement('div');
+    row.className = 'tt-row' + (o.leave ? ' leave' : '');
+    const head = document.createElement('div');
+    const name = document.createElement('span'); name.className = 'tt-name'; name.textContent = o.title || '（沒有標題）';
+    const time = document.createElement('span'); time.className = 'tt-time';
+    time.textContent = (o.startTime ? o.startTime + '–' + o.endTime : '') + (o.recurring ? '　每週重複' : '');
+    head.appendChild(name); head.appendChild(time);
+
+    const checks = document.createElement('div'); checks.className = 'tt-checks';
+    const mk = (labelText, checked)=>{
+      const lb = document.createElement('label');
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = checked;
+      lb.appendChild(cb); lb.appendChild(document.createTextNode(labelText));
+      checks.appendChild(lb);
+      return cb;
+    };
+    const cbLeave = mk('💤 請假', o.leave);
+    const cbPaid = mk('💰 沒上課有付錢', o.paidAbsence);
+    const saved = ov.querySelector('#ttMarkSaved');
+    const save = async ()=>{
+      saved.textContent = '儲存中…';
+      const ok = await window.ttSetMark(o, cbLeave.checked, cbPaid.checked);
+      saved.textContent = ok ? '✓ 已儲存' : '';
+    };
+    // 兩個選項互斥：勾一個就自動取消另一個
+    cbLeave.addEventListener('change', ()=>{ if(cbLeave.checked) cbPaid.checked = false; save(); });
+    cbPaid.addEventListener('change', ()=>{ if(cbPaid.checked) cbLeave.checked = false; save(); });
+
+    row.appendChild(head); row.appendChild(checks);
+    list.appendChild(row);
+  });
+}
+
+/* 開啟標記視窗：只給日期＝列出當天全部的課；再給 key＝只顯示那一堂 */
+window.ttOpenMarkDialog = function(dateISO, onlyKey){
+  const ov = ensureDialog();
+  dialogDate = dateISO; dialogOnlyKey = onlyKey || null;
+  ov.querySelector('#ttMarkSaved').textContent = '';
+  ov.classList.add('active');
+  renderDialog();
+};
+
+window.ttSubscribe(renderDialog);
 })();
 </script>
 
