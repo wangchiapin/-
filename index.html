@@ -3254,12 +3254,9 @@ ${recentTrend.join('\n')}
 
         pushTableSheet(sheets, '學生收費表', document.getElementById('studentTable'));
 
-        const calTable = document.querySelector('#calendar-area table.calendar-table');
-        if (calTable) {
-            pushTableSheet(sheets, `${currentYear - ROC_YEAR_OFFSET}年${currentMonth + 1}月日曆`, calTable);
-        } else {
-            sheets.push({ name: `${currentYear - ROC_YEAR_OFFSET}年${currentMonth + 1}月日曆`, aoa: calendarTableToAOA() });
-        }
+        // 日曆表改為直接依資料產生（跟「匯出全部月份」同一套），每一堂金額都會列出來；
+        // 以前是直接讀畫面表格，每個日期格只讀得到第一個輸入框，同一天第 2 堂以後會漏掉。
+        sheets.push({ name: `${currentYear - ROC_YEAR_OFFSET}年${currentMonth + 1}月日曆`, aoa: buildCalendarAOAForMonth(currentYear, currentMonth) });
 
         pushTableSheet(sheets, '本月收入總覽', document.querySelector('.summary-container table'));
         pushTableSheet(sheets, '近期每月統計', document.querySelector('#monthly-summary-area table'));
