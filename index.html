@@ -1833,7 +1833,8 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
 <!-- ===================== 次頁：實際收入紀錄表 ===================== -->
 <div class="view card actual-container" id="view-actual" style="display:none;">
     <h2>實際收入與匯款紀錄</h2>
-    <button class="btn btn-add" onclick="addRow()">+ 新增一筆紀錄</button>
+    <button class="btn btn-add" onclick="openRecordDialog()">+ 新增一筆紀錄</button>
+    <button class="btn btn-add-inline" onclick="addRow()" title="原本的方式：在表格最下面加一列空白列，直接在表格裡填">＋ 直接在表格加一列</button>
     <button class="btn" onclick="exportRecordsExcel()" style="float:right;">📤 匯出 Excel</button>
     <button class="btn" style="float:right; margin-right:8px; background:var(--forest-light);" onclick="openAiModal()">✨ Gemini AI 分析</button>
     <button class="btn" onclick="exportData()" style="float:right; margin-right:8px;">匯出資料(JSON)</button>
@@ -1842,7 +1843,8 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
     <div style="clear:both; font-size:11px; color:var(--forest-bark); margin:-4px 0 10px;">
         支援 .xlsx / .xls / .csv，會自動辨識「收款日、學生、每堂收費、匯入金額、實收金額、匯率、台幣、換算台幣、購買堂數、匯款方式、備考」等欄位標題並附加到下方紀錄後面<br>
         每次新增／修改／刪除紀錄後，會自動把每個月「換算台幣」總額同步到生活帳本 moneybook 的「華語文教學」收入（需先在上方登入生活帳本帳號）。<br>
-        「匯率」欄位（美金列）可直接在表格內逐筆修改：新增紀錄時預設帶入 29，之後每一筆都可以改成當次實際換匯的匯率。
+        「匯率」欄位（美金列）可直接在表格內逐筆修改：新增紀錄時預設帶入 29，之後每一筆都可以改成當次實際換匯的匯率。<br>
+        「+ 新增一筆紀錄」會跳出填寫視窗（學生可下拉選或直接打）；想照以前直接在表格裡填，按「＋ 直接在表格加一列」。已存在的紀錄一樣直接在表格裡改。
     </div>
 
     <div class="record-filter-bar" style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; background:var(--forest-pale); border:1px solid var(--forest-line); border-radius:10px; padding:10px 14px; margin-bottom:12px;">
@@ -1889,7 +1891,8 @@ async function sendAiFollowup(panelKey, inputElId, historyElId, chatWrapElId) {
         </table>
     </div>
 
-    <button class="btn btn-add" style="margin-top:10px;" onclick="addRow()">+ 新增一筆紀錄</button>
+    <button class="btn btn-add" style="margin-top:10px;" onclick="openRecordDialog()">+ 新增一筆紀錄</button>
+    <button class="btn btn-add-inline" style="margin-top:10px;" onclick="addRow()" title="原本的方式：在表格最下面加一列空白列，直接在表格裡填">＋ 直接在表格加一列</button>
 
     <div class="summary-wrapper" id="summary-area"></div>
 
@@ -8678,5 +8681,343 @@ updateScheduleGateUI(null);
 updateStdGateUI(null);
 if (typeof updateCourseCalGateUI === 'function') updateCourseCalGateUI(null);
 </script>
+<!-- ===================== 實際收入紀錄：記帳模式「新增一筆」彈出視窗 =====================
+     只是另一種輸入方式：存檔時一樣 push 進 records、走 renderTable() + saveData()，
+     計算規則（幣別判斷、匯率預設 29、自動帶入匯款方式、各幣別哪些欄位可填）全部共用表格那一套，
+     所以表格內直接修改的方式完全不受影響。 -->
+<style>
+    .rd-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px 14px;}
+    .rd-field{display:flex; flex-direction:column; gap:4px; min-width:0;}
+    .rd-field.full{grid-column:1 / -1;}
+    .rd-field label{font-size:12px; color:var(--forest-bark); font-weight:700;}
+    .rd-field label .rd-hint{font-weight:400; opacity:.85; margin-left:4px;}
+    .rd-field input{width:100%; box-sizing:border-box; border:1px solid var(--forest-line); border-radius:8px; padding:9px 10px; font-size:14px; font-family:inherit; background:#fff; color:var(--forest-deep);}
+    .rd-field input:focus{outline:2px solid var(--forest-light); outline-offset:0;}
+    .rd-combo{position:relative;}
+    .rd-combo input{padding-right:38px;}
+    .rd-combo-btn{position:absolute; right:4px; top:50%; transform:translateY(-50%); border:none; background:var(--forest-pale); color:var(--forest-deep); border-radius:6px; width:30px; height:30px; cursor:pointer; font-size:12px;}
+    .rd-list{position:absolute; left:0; right:0; top:calc(100% + 4px); background:#fff; border:1px solid var(--forest-line); border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,.15); max-height:220px; overflow-y:auto; z-index:5; display:none;}
+    .rd-list.open{display:block;}
+    .rd-list button{display:block; width:100%; text-align:left; border:none; background:none; padding:9px 12px; font-size:14px; font-family:inherit; color:var(--forest-deep); cursor:pointer;}
+    .rd-list button:hover, .rd-list button.active{background:var(--forest-pale);}
+    .rd-list .rd-group{font-size:11px; color:var(--forest-bark); padding:6px 12px 2px; background:var(--forest-cream);}
+    .rd-list .rd-sub{font-size:11px; color:var(--forest-bark); margin-left:6px;}
+    .rd-currency{grid-column:1 / -1; font-size:12px; color:var(--forest-bark); background:var(--forest-cream); border:1px dashed var(--forest-line); border-radius:8px; padding:6px 10px;}
+    .rd-currency b{color:var(--forest-deep);}
+    .rd-preview{margin-top:12px; background:var(--forest-pale); border:1px solid var(--forest-line); border-radius:10px; padding:10px 12px; font-size:13px; color:var(--forest-deep); display:flex; flex-wrap:wrap; gap:6px 18px;}
+    .rd-preview .rd-pv-item span{color:var(--forest-bark); font-size:12px; margin-right:4px;}
+    .rd-actions{display:flex; gap:8px; justify-content:flex-end; margin-top:14px; flex-wrap:wrap;}
+    .rd-actions .btn{margin:0;}
+    .rd-error{color:var(--forest-berry); font-size:12px; min-height:14px; margin-top:8px;}
+    .rd-toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--forest-deep); color:#fff; padding:10px 18px; border-radius:20px; font-size:13px; z-index:200; box-shadow:0 6px 18px rgba(0,0,0,.25); opacity:0; transition:opacity .25s; pointer-events:none;}
+    .rd-toast.show{opacity:1;}
+    #record-tbody tr.rd-flash td{animation:rdFlash 2.2s ease-out;}
+    @keyframes rdFlash{0%,40%{box-shadow:inset 0 0 0 9999px rgba(240,200,80,.45);}100%{box-shadow:none;}}
+    .btn-add-inline{background:transparent; color:var(--forest-mid); border:1px dashed var(--forest-mid);}
+    @media (max-width:600px){
+        .rd-grid{grid-template-columns:1fr;}
+        #recordDialog .modal-box{padding:14px 14px; max-height:92vh;}
+        .rd-actions .btn{flex:1 1 auto;}
+    }
+</style>
+
+<div class="modal-overlay" id="recordDialog" onclick="if(event.target===this) closeRecordDialog();">
+    <div class="modal-box" style="max-width:560px;">
+        <h3>➕ 新增一筆收入紀錄<button class="modal-close" type="button" onclick="closeRecordDialog()">關閉</button></h3>
+        <div class="rd-grid">
+            <div class="rd-field">
+                <label for="rdDate">收款日</label>
+                <input type="date" id="rdDate">
+            </div>
+            <div class="rd-field">
+                <label for="rdStudent">學生<span class="rd-hint">可下拉選，也可直接打</span></label>
+                <div class="rd-combo">
+                    <input type="text" id="rdStudent" autocomplete="off" placeholder="例：Mirna">
+                    <button type="button" class="rd-combo-btn" id="rdStudentBtn" tabindex="-1" aria-label="顯示學生清單">▼</button>
+                    <div class="rd-list" id="rdStudentList" role="listbox"></div>
+                </div>
+            </div>
+            <div class="rd-field full">
+                <label for="rdFee">每堂收費<span class="rd-hint">例：350披索、18美金、700台幣（決定下面要填哪些欄位）</span></label>
+                <input type="text" id="rdFee" autocomplete="off">
+            </div>
+            <div class="rd-currency" id="rdCurrency"></div>
+            <div class="rd-field" data-rd="remitted">
+                <label for="rdRemitted">匯入金額<span class="rd-hint">(美金/墨幣)</span></label>
+                <input type="text" inputmode="decimal" id="rdRemitted">
+            </div>
+            <div class="rd-field" data-rd="actual">
+                <label for="rdActual">實收金額<span class="rd-hint">(美金/墨幣)</span></label>
+                <input type="text" inputmode="decimal" id="rdActual">
+            </div>
+            <div class="rd-field" data-rd="rate">
+                <label for="rdRate">匯率</label>
+                <input type="text" inputmode="decimal" id="rdRate">
+            </div>
+            <div class="rd-field" data-rd="twd">
+                <label for="rdTwd">台幣</label>
+                <input type="text" inputmode="decimal" id="rdTwd">
+            </div>
+            <div class="rd-field">
+                <label for="rdClasses">購買堂數</label>
+                <input type="text" inputmode="decimal" id="rdClasses">
+            </div>
+            <div class="rd-field">
+                <label for="rdMethod">匯款方式</label>
+                <input type="text" id="rdMethod" list="rdMethodList" autocomplete="off">
+                <datalist id="rdMethodList"></datalist>
+            </div>
+            <div class="rd-field full">
+                <label for="rdNotes">備考</label>
+                <input type="text" id="rdNotes" autocomplete="off">
+            </div>
+        </div>
+        <div class="rd-preview" id="rdPreview"></div>
+        <div class="rd-error" id="rdError"></div>
+        <div class="rd-actions">
+            <button type="button" class="btn" onclick="closeRecordDialog()">取消</button>
+            <button type="button" class="btn" onclick="saveRecordDialog(true)">儲存並再新增一筆</button>
+            <button type="button" class="btn btn-add" onclick="saveRecordDialog(false)">儲存</button>
+        </div>
+    </div>
+</div>
+<div class="rd-toast" id="rdToast"></div>
+
+<script>
+(function () {
+    "use strict";
+    const $ = id => document.getElementById(id);
+    const MONEY_FIELDS = ['remitted', 'actual', 'rate', 'twd'];
+    const CURRENCY_LABEL = { peso: '墨西哥披索', usd: '美金', twd: '台幣' };
+    let feeAutoFilled = false;   // 「每堂收費」是不是系統依學生自動帶的（使用者自己改過就不再覆蓋）
+    let rateAutoFilled = false;  // 「匯率」是不是系統帶的預設 29
+    let listActive = -1;
+
+    function todayLocalISO() {
+        const d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    /* 學生清單：先列「華語課表」裡目前的學生，再列過去紀錄出現過、但已不在課表的名字 */
+    function studentOptions() {
+        const current = [], seen = new Set();
+        (typeof studentData !== 'undefined' && Array.isArray(studentData) ? studentData : []).forEach(s => {
+            const n = String(s.name || '').trim();
+            if (n && !seen.has(n)) { seen.add(n); current.push({ name: n, fee: s.fee || '' }); }
+        });
+        const past = [];
+        const recs = (typeof records !== 'undefined' && Array.isArray(records)) ? records : [];
+        for (let i = recs.length - 1; i >= 0; i--) {
+            const n = String(recs[i].student || '').trim();
+            if (n && !seen.has(n)) { seen.add(n); past.push({ name: n, fee: recs[i].fee || '' }); }
+        }
+        past.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+        return { current, past };
+    }
+
+    /* 選了學生之後，「每堂收費」帶什麼：優先用這位學生最近一筆紀錄的寫法，沒有的話用華語課表設定的原幣收費 */
+    function guessFeeFor(name) {
+        const recs = (typeof records !== 'undefined' && Array.isArray(records)) ? records : [];
+        let best = null;
+        recs.forEach(r => {
+            if (String(r.student || '').trim() === name && r.fee && (!best || String(r.date || '') >= String(best.date || ''))) best = r;
+        });
+        if (best) return best.fee;
+        const s = (typeof studentData !== 'undefined' && Array.isArray(studentData)) ? studentData.find(x => x.name === name) : null;
+        return s && s.fee ? s.fee : '';
+    }
+
+    function renderStudentList(filterText) {
+        const box = $('rdStudentList');
+        const q = String(filterText || '').trim().toLowerCase();
+        const { current, past } = studentOptions();
+        const match = o => !q || o.name.toLowerCase().includes(q);
+        const groups = [['華語課表上的學生', current.filter(match)], ['以前的紀錄', past.filter(match)]];
+        box.innerHTML = '';
+        let count = 0;
+        groups.forEach(([title, items]) => {
+            if (!items.length) return;
+            const g = document.createElement('div'); g.className = 'rd-group'; g.textContent = title; box.appendChild(g);
+            items.forEach(o => {
+                const b = document.createElement('button');
+                b.type = 'button'; b.setAttribute('role', 'option');
+                b.textContent = o.name;
+                if (o.fee) { const sub = document.createElement('span'); sub.className = 'rd-sub'; sub.textContent = o.fee; b.appendChild(sub); }
+                b.addEventListener('mousedown', e => e.preventDefault()); // 不讓輸入框先失焦把清單收起來
+                b.addEventListener('click', () => pickStudent(o.name));
+                box.appendChild(b);
+                count++;
+            });
+        });
+        listActive = -1;
+        return count;
+    }
+    function openStudentList() { if (renderStudentList($('rdStudent').value) > 0) $('rdStudentList').classList.add('open'); else closeStudentList(); }
+    function closeStudentList() { $('rdStudentList').classList.remove('open'); listActive = -1; }
+
+    function pickStudent(name) {
+        $('rdStudent').value = name;
+        closeStudentList();
+        onStudentChosen();
+        $('rdFee').focus();
+    }
+    function onStudentChosen() {
+        const name = $('rdStudent').value.trim();
+        if (!name) return;
+        if (!$('rdFee').value.trim() || feeAutoFilled) {
+            const fee = guessFeeFor(name);
+            if (fee) { $('rdFee').value = fee; feeAutoFilled = true; }
+        }
+        refresh();
+    }
+
+    function readForm() {
+        return {
+            date: $('rdDate').value, student: $('rdStudent').value.trim(), fee: $('rdFee').value.trim(),
+            remitted: $('rdRemitted').value.trim(), actual: $('rdActual').value.trim(),
+            rate: $('rdRate').value.trim(), twd: $('rdTwd').value.trim(), convTwd: '',
+            classes: $('rdClasses').value.trim(), method: $('rdMethod').value.trim(),
+            avg: '', ppFee: '', ppRate: '', notes: $('rdNotes').value.trim()
+        };
+    }
+
+    /* 依「每堂收費」判斷的幣別，顯示該填的欄位，並用表格同一套 recalcRow() 試算結果 */
+    function refresh() {
+        const currency = detectFeeCurrency($('rdFee').value);
+        const editable = FIELD_EDITABLE_BY_CURRENCY[currency || 'other'];
+        MONEY_FIELDS.forEach(f => {
+            const wrap = document.querySelector(`#recordDialog [data-rd="${f}"]`);
+            if (wrap) wrap.style.display = editable[f] ? '' : 'none';
+        });
+
+        // 匯率：美金時跟表格一樣預設 29（使用者改過就保留使用者的數字）
+        if (currency === 'usd' && (!$('rdRate').value.trim() || rateAutoFilled)) {
+            $('rdRate').value = String(DEFAULT_USD_RATE); rateAutoFilled = true;
+        } else if (currency !== 'usd' && rateAutoFilled) {
+            $('rdRate').value = ''; rateAutoFilled = false;
+        }
+        // 匯款方式：跟表格一樣，只有目前是空的才自動帶入（披索→海產代轉、美金→PayPal、台幣→現金-國泰）
+        const defMethod = DEFAULT_METHOD_BY_CURRENCY[currency];
+        if (defMethod && !$('rdMethod').value.trim()) $('rdMethod').value = defMethod;
+
+        $('rdCurrency').innerHTML = currency
+            ? `偵測到幣別：<b>${CURRENCY_LABEL[currency]}</b>　只需要填下面顯示的欄位，其他會自動算`
+            : (($('rdFee').value.trim())
+                ? '看不出幣別（每堂收費裡沒有「披索／美金／台幣」字樣），所以所有金額欄位都開放填寫'
+                : '先填「每堂收費」，系統會依幣別只留需要填的欄位');
+
+        const row = readForm();
+        recalcRow(row);
+        const pv = [];
+        const fmt = v => (v === '' || v === undefined || isNaN(parseFloat(v))) ? '—' : Number(v).toLocaleString();
+        pv.push(`<div class="rd-pv-item"><span>換算台幣</span><b>NT$ ${fmt(row.convTwd)}</b></div>`);
+        pv.push(`<div class="rd-pv-item"><span>平均每堂</span>NT$ ${fmt(row.avg)}</div>`);
+        if (currency === 'peso') pv.push(`<div class="rd-pv-item"><span>匯率（自動反推）</span>${row.rate || '—'}</div>`);
+        if (currency === 'peso') pv.push(`<div class="rd-pv-item"><span>實收金額</span>${row.actual || '—'}</div>`);
+        if (row.ppFee) pv.push(`<div class="rd-pv-item"><span>PayPal 手續費</span>${row.ppFee}（${row.ppRate}）</div>`);
+        $('rdPreview').innerHTML = pv.join('');
+    }
+
+    function resetForm(keepDate) {
+        const keep = keepDate ? $('rdDate').value : '';
+        ['rdStudent', 'rdFee', 'rdRemitted', 'rdActual', 'rdRate', 'rdTwd', 'rdClasses', 'rdMethod', 'rdNotes'].forEach(id => { $(id).value = ''; });
+        $('rdDate').value = keep || todayLocalISO();
+        $('rdError').textContent = '';
+        feeAutoFilled = false; rateAutoFilled = false;
+        closeStudentList();
+        refresh();
+    }
+
+    function fillMethodList() {
+        const set = new Set(Object.values(DEFAULT_METHOD_BY_CURRENCY));
+        ((typeof records !== 'undefined' && Array.isArray(records)) ? records : []).forEach(r => { if (r.method) set.add(String(r.method).trim()); });
+        $('rdMethodList').innerHTML = [...set].filter(Boolean).map(m => `<option value="${m.replace(/"/g, '&quot;')}"></option>`).join('');
+    }
+
+    window.openRecordDialog = function () {
+        fillMethodList();
+        resetForm(false);
+        $('recordDialog').classList.add('open');
+        setTimeout(() => $('rdStudent').focus(), 30);
+    };
+    window.closeRecordDialog = function () {
+        $('recordDialog').classList.remove('open');
+        closeStudentList();
+    };
+
+    function toast(msg) {
+        const t = $('rdToast');
+        t.textContent = msg; t.classList.add('show');
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => t.classList.remove('show'), 2600);
+    }
+
+    window.saveRecordDialog = function (again) {
+        const row = readForm();
+        if (!row.date) { $('rdError').textContent = '請填收款日'; $('rdDate').focus(); return; }
+        if (!row.student) { $('rdError').textContent = '請填學生（可以從清單選，也可以直接打）'; $('rdStudent').focus(); return; }
+        // 表格那邊，「每堂收費」改動時才會自動帶匯款方式；這裡同樣規則，空的才帶
+        const defMethod = DEFAULT_METHOD_BY_CURRENCY[detectFeeCurrency(row.fee)];
+        if (defMethod && !row.method) row.method = defMethod;
+        recalcRow(row);
+        records.push(row);
+        renderTable();   // 會依收款日重新排序
+        saveData();      // 跟表格一樣：存本機、同步 Firestore、同步生活帳本月收入
+
+        const idx = records.indexOf(row);
+        const tr = document.getElementById('record-tbody') ? document.getElementById('record-tbody').children[idx] : null;
+        const hiddenByFilter = tr && tr.style.display === 'none';
+        if (tr && !hiddenByFilter) {
+            tr.classList.add('rd-flash');
+            setTimeout(() => tr.classList.remove('rd-flash'), 2300);
+            if (!again) tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+        toast(`✓ 已新增：${row.date} ${row.student}` + (row.convTwd ? `　NT$${Number(row.convTwd).toLocaleString()}` : '') + (hiddenByFilter ? '（目前的篩選條件下看不到這筆）' : ''));
+
+        if (again) { resetForm(true); setTimeout(() => $('rdStudent').focus(), 30); }
+        else closeRecordDialog();
+    };
+
+    /* ---------- 事件 ---------- */
+    const stu = $('rdStudent');
+    stu.addEventListener('focus', openStudentList);
+    stu.addEventListener('input', () => { openStudentList(); refresh(); });
+    stu.addEventListener('blur', () => setTimeout(() => { closeStudentList(); onStudentChosen(); }, 120));
+    stu.addEventListener('keydown', e => {
+        const box = $('rdStudentList');
+        const btns = [...box.querySelectorAll('button')];
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            if (!box.classList.contains('open')) openStudentList();
+            if (!btns.length) return;
+            e.preventDefault();
+            listActive = e.key === 'ArrowDown' ? Math.min(btns.length - 1, listActive + 1) : Math.max(0, listActive - 1);
+            btns.forEach((b, i) => b.classList.toggle('active', i === listActive));
+            btns[listActive].scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'Enter') {
+            if (box.classList.contains('open') && listActive >= 0 && btns[listActive]) {
+                e.preventDefault();
+                pickStudent(btns[listActive].firstChild.textContent);
+            }
+        } else if (e.key === 'Escape' && box.classList.contains('open')) {
+            e.stopPropagation(); closeStudentList();
+        }
+    });
+    $('rdStudentBtn').addEventListener('mousedown', e => e.preventDefault());
+    $('rdStudentBtn').addEventListener('click', () => {
+        if ($('rdStudentList').classList.contains('open')) { closeStudentList(); return; }
+        stu.focus();
+        if (renderStudentList('') > 0) $('rdStudentList').classList.add('open'); // 按 ▼ 一律列出全部
+    });
+
+    $('rdFee').addEventListener('input', () => { feeAutoFilled = false; refresh(); });
+    $('rdRate').addEventListener('input', () => { rateAutoFilled = false; refresh(); });
+    ['rdRemitted', 'rdActual', 'rdTwd', 'rdClasses', 'rdMethod', 'rdDate'].forEach(id => $(id).addEventListener('input', refresh));
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && $('recordDialog').classList.contains('open')) closeRecordDialog();
+    });
+})();
+</script>
+
 </body>
 </html>
